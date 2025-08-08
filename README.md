@@ -60,7 +60,6 @@ AGPL-3.0 — see `LICENSE`.
 ## Donate
 If this project helps you, consider a small donation. Thank you!
 
-Replace the address below with your wallet and commit:
 
 ```
 Wallet: YOUR_WALLET_ADDRESS_HERE
