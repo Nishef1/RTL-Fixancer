@@ -30,7 +30,6 @@ Coming soon.
 3) Enable “Developer mode”.
 4) Click “Load unpacked” and select the extension folder (the repo root that contains `manifest.json`).
 5) Pin the extension and open a supported site. Use the popup to enable the current site and configure fonts/sensitivity.
-
 ## Usage
 - Use the popup to toggle the current site, pick a font (Vazir/Shabnam/Default), and set detection sensitivity.
 - Click “PDF” in the popup to export chat or page content to a print window. Use the browser print dialog to save as PDF.
@@ -66,10 +65,8 @@ AGPL-3.0 — see `LICENSE`.
 ## Donate
 If this project helps you, consider a small donation. Thank you!
 
-Replace the address below with your wallet and commit:
-
 ```
-Wallet: YOUR_WALLET_ADDRESS_HERE
+Wallet: 0x5ba08cc1429bead9c07dc2030b881c6ed33c3a00
 ```
 
 ## Links
