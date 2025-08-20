@@ -62,7 +62,7 @@ If this project helps you, consider a small donation. Thank you!
 
 
 ```
-Wallet: YOUR_WALLET_ADDRESS_HERE
+Wallet: 0x5ba08cc1429bead9c07dc2030b881c6ed33c3a00
 ```
 
 ## Links
