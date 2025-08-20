@@ -60,7 +60,7 @@ Coming soon.
 Issues and PRs are welcome. Please describe the site/URL and include screenshots if reporting layout problems.
 
 ## License
-AGPL-3.0 — see `LICENSE`.
+CC BY-NC-ND 4.0 — see `LICENSE`.
 
 ## Donate
 If this project helps you, consider a small donation. Thank you!
