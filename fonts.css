@@ -1,0 +1,84 @@
+/* Primary Font Definitions - Compatible with content.js */
+@font-face {
+    font-family: 'VazirAIStudio';
+    src: url('chrome-extension://__MSG_@@extension_id__/vazir.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'ShabnamAIStudio';
+    src: url('chrome-extension://__MSG_@@extension_id__/shabnam.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Fallback Font Definitions for backward compatibility */
+@media print {
+  @font-face {
+    font-family: 'Vazir';
+    src: url('chrome-extension://__MSG_@@extension_id__/vazir.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+  
+  .dialog, .message {
+    page-break-inside: avoid;
+  }
+  
+  body {
+    direction: rtl;
+    unicode-bidi: embed;
+    -webkit-rtl-ordering: logical;
+  }
+}
+
+@font-face {
+    font-family: 'Shabnam';
+    src: url('chrome-extension://__MSG_@@extension_id__/shabnam.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* استایل‌های فقط برای متون فارسی تشخیص داده شده */
+.rtl-persian-text {
+    direction: rtl !important;
+    text-align: right !important;
+    unicode-bidi: embed !important;
+}
+
+/* اعمال فونت وزیر فقط به متون فارسی - Updated selectors */
+html[data-font="vazir"] .rtl-persian-text,
+html[data-font="vazir"] [data-ai-rtl-persian-text="true"],
+html[data-font="vazir"] [data-ai-rtl-persian-input="true"] {
+    font-family: 'VazirAIStudio', 'Vazir', Tahoma, Arial, sans-serif !important;
+}
+
+/* اعمال فونت شبنم فقط به متون فارسی - Updated selectors */
+html[data-font="shabnam"] .rtl-persian-text,
+html[data-font="shabnam"] [data-ai-rtl-persian-text="true"],
+html[data-font="shabnam"] [data-ai-rtl-persian-input="true"] {
+    font-family: 'ShabnamAIStudio', 'Shabnam', Tahoma, Arial, sans-serif !important;
+}
+
+/* تنظیمات اضافی برای بهتر شدن نمایش */
+.rtl-persian-text p,
+.rtl-persian-text div,
+.rtl-persian-text span {
+    direction: inherit !important;
+    text-align: inherit !important;
+}
+
+/* جلوگیری از اعمال RTL روی عناصر خاص */
+.rtl-persian-text code,
+.rtl-persian-text pre,
+.rtl-persian-text input,
+.rtl-persian-text textarea,
+.rtl-persian-text a[href*="http"] {
+    direction: ltr !important;
+    text-align: left !important;
+}
