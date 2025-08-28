@@ -71,5 +71,6 @@ Wallet: 0x5ba08cc1429bead9c07dc2030b881c6ed33c3a00
 
 ## Links
 - GitHub: https://github.com/Nishef1/RTL-Fixancer
+- [فارسی (Persian)](README.fa.md) - نسخه فارسی برای کاربران ایرانی
 
 
