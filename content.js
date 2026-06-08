@@ -15,13 +15,8 @@ class RTLAIStudioManager {
         this.stableElements = new WeakSet();
         this.observer = null;
         this.inputCheckTimer = null;
-        this.aiStudioTimer = null;
-        this.perplexityTimer = null;
         this.aiStudioMutationObserver = null;
         this.heartbeatInterval = null;
-        this.globalComposerTimer = null;
-        this.forceProcessingTimer = null; // اضافه کردن timer اجباری
-        this.enableSitePollTimer = null; // بررسی دوره‌ای فعال بودن سایت در تب‌های جدید
         this.hasInitialized = false; // پرچم شروع موفق
         
         // بهینه‌سازی: timer manager ساده
@@ -40,10 +35,7 @@ class RTLAIStudioManager {
         this.languageCache = new Map();
         this.maxLanguageCacheSize = 200;
         
-        this.aiStudioEmergencyTimer = null; // تایمر اضطراری Google AI Studio
-        this.perplexityEmergencyTimer = null; // تایمر اضطراری Perplexity
-        this.chatGPTTimer = null; // تایمر ChatGPT
-        this.chatGPTEmergencyTimer = null; // تایمر اضطراری ChatGPT
+        // All timers are managed via this.timers Map
         
         // بهبود آمار برای debug
         this.stats = { 
@@ -296,9 +288,14 @@ class RTLAIStudioManager {
                 await this.immediateProcessAllContent();
                 
                 this.startInputMonitoring();
-                if (this.isAIStudio) this.setupAIStudioSpecialMonitoring();
-                if (this.isPerplexity) this.setupPerplexitySpecialMonitoring();
-                if (this.isChatGPT) this.setupChatGPTSpecialMonitoring();
+                if (this.isAIStudio) this._setupSiteMonitoring('AIStudio', 'processAIStudioSpecialElements', 500, 3000);
+                if (this.isPerplexity) this._setupSiteMonitoring('Perplexity', 'processPerplexitySpecialElements', 800, 5000, () => {
+                    if (this.shouldPerformPerplexityFullScan()) {
+                        console.log('RTL AI Studio: Performing Perplexity full scan due to long chat');
+                        setTimeout(() => this.performFullPageScan(), 500);
+                    }
+                });
+                if (this.isChatGPT) this._setupSiteMonitoring('ChatGPT', 'processChatGPTSpecialElements', 1000, 8000);
                 
                 // پردازش اضافی برای اطمینان
                 setTimeout(() => this.immediateProcessAllContent(), 500);
@@ -1184,53 +1181,77 @@ class RTLAIStudioManager {
         } catch (_) { return element; }
     }
 
-    setupAIStudioSpecialMonitoring() {
-        if (this.aiStudioTimer) clearInterval(this.aiStudioTimer);
-        
-        this.aiStudioTimer = setInterval(() => {
-            this.processAIStudioSpecialElements();
-            this.processInputs(document);
-            this.recheckAIStudioElements(); // بررسی مجدد عناصر موجود
-        }, 500); // فرکانس بالا برای واکنش فوری در AI Studio
+    // ============================================================
+    // DRY refactoring: Consolidated monitoring and recheck methods
+    // ============================================================
 
-        // تایمر اضطراری برای اسکن کامل
-        this.aiStudioEmergencyTimer = setInterval(() => {
+    _setupSiteMonitoring(siteName, processMethod, checkInterval, emergencyInterval, extrasCallback = null) {
+        this.setTimer(siteName + 'Check', () => {
+            this[processMethod]();
+            this.processInputs(document);
+            this._recheckElements(siteName);
+            if (extrasCallback) extrasCallback();
+        }, checkInterval);
+
+        this.setTimer(siteName + 'Emergency', () => {
             if (this.config.isEnabled && this.isSiteEnabled()) {
                 this.aggressiveAIStudioRecheck();
             }
-        }, 3000); // هر 3 ثانیه اسکن کامل
+        }, emergencyInterval);
     }
 
-    // بررسی مجدد عناصر موجود در AI Studio برای رفع مشکل فراموشی
-    recheckAIStudioElements() {
-        if (!this.isAIStudio) return;
+    // Consolidated recheck method (DRY: replaces 3 separate recheck methods)
+    _recheckElements(siteName) {
+        const configs = {
+            'AIStudio': {
+                selectors: 'p, span, div, h1, h2, h3, h4, h5, h6, li',
+                maxRecheck: 50,
+                logName: 'Google AI Studio'
+            },
+            'Perplexity': {
+                selectors: '.prose p, .prose span, .prose div, .answer p, .answer span, .answer div, ' +
+                           '[data-testid="answer"] p, [data-testid="answer"] span, [data-testid="answer"] div, ' +
+                           'p, span, div, h1, h2, h3, h4, h5, h6, li',
+                maxRecheck: 60,
+                logName: 'Perplexity'
+            },
+            'ChatGPT': {
+                selectors: '[data-testid="conversation-turn"] p, [data-testid="conversation-turn"] span, ' +
+                           '[data-testid="conversation-turn"] div, [data-message-author-role] p, ' +
+                           '[data-message-author-role] span, [data-message-author-role] div, ' +
+                           '.markdown p, .markdown span, .markdown div, ' +
+                           'p, span, div, h1, h2, h3, h4, h5, h6, li',
+                maxRecheck: 70,
+                logName: 'ChatGPT'
+            }
+        };
+
+        const config = configs[siteName];
+        if (!config) return;
+        if (!this['is' + siteName]) return;
 
         try {
-            // یافتن عناصر متنی که ممکن است attribute هایشان از بین رفته باشد
-            const textElements = document.querySelectorAll(
-                'p, span, div, h1, h2, h3, h4, h5, h6, li'
-            );
+            const textElements = document.querySelectorAll(config.selectors);
 
             let recheckCount = 0;
-            const maxRecheck = 50; // محدودیت برای جلوگیری از اورلود
 
             textElements.forEach(element => {
-                if (recheckCount >= maxRecheck) return;
+                if (recheckCount >= config.maxRecheck) return;
 
                 const text = this.getCleanText(element);
                 if (!text || text.length < 1) return;
 
-                // اگر عنصر attribute ندارد اما متن فارسی دارد
-                if (!element.hasAttribute('data-ai-rtl-persian-text') && 
+                // Re-process elements that lost their attribute but still have Persian text
+                if (!element.hasAttribute('data-ai-rtl-persian-text') &&
                     !element.hasAttribute('data-ai-rtl-english-text')) {
-                    
-                    // بررسی کش برای بازیابی حالت قبلی
+
+                    // Check cache for previous state
                     if (this.isElementAlreadyProcessed(element, text)) {
                         recheckCount++;
                         return;
                     }
 
-                    // اگر متن فارسی دارد، پردازش کن
+                    // If has Persian text, process it
                     if (this.hasAnyPersianChar(text)) {
                         this.processElement(element);
                         recheckCount++;
@@ -1239,11 +1260,15 @@ class RTLAIStudioManager {
             });
 
             if (recheckCount > 0) {
-                console.log(`RTL AI Studio: Rechecked ${recheckCount} elements in Google AI Studio`);
+                console.log('RTL AI Studio: Rechecked ' + recheckCount + ' elements in ' + config.logName);
             }
         } catch (error) {
-            console.error('Error in recheckAIStudioElements:', error);
+            console.error('Error in _recheckElements for ' + config.logName + ':', error);
         }
+    }
+
+    setupAIStudioSpecialMonitoring() {
+        this._setupSiteMonitoring('AIStudio', 'processAIStudioSpecialElements', 500, 3000);
     }
 
     // بررسی تهاجمی برای سایت‌های چت پس از اسکرول
@@ -1347,73 +1372,12 @@ class RTLAIStudioManager {
     }
 
     setupPerplexitySpecialMonitoring() {
-        if (this.perplexityTimer) clearInterval(this.perplexityTimer);
-        
-        this.perplexityTimer = setInterval(() => {
-            this.processPerplexitySpecialElements();
-            this.processInputs(document);
-            this.recheckPerplexityElements(); // اضافه کردن بررسی مجدد
-            
-            // برای چت‌های طولانی در Perplexity، گاهی اسکن کامل انجام بده
+        this._setupSiteMonitoring('Perplexity', 'processPerplexitySpecialElements', 800, 5000, () => {
             if (this.shouldPerformPerplexityFullScan()) {
                 console.log('RTL AI Studio: Performing Perplexity full scan due to long chat');
                 setTimeout(() => this.performFullPageScan(), 500);
             }
-        }, 800); // فرکانس بالاتر برای واکنش بهتر
-
-        // تایمر اضطراری برای Perplexity
-        this.perplexityEmergencyTimer = setInterval(() => {
-            if (this.config.isEnabled && this.isSiteEnabled() && this.isPerplexity) {
-                this.aggressiveAIStudioRecheck();
-            }
-        }, 5000); // هر 5 ثانیه اسکن کامل
-    }
-
-    // بررسی مجدد عناصر موجود در Perplexity
-    recheckPerplexityElements() {
-        if (!this.isPerplexity) return;
-
-        try {
-            // یافتن عناصر متنی که ممکن است attribute هایشان از بین رفته باشد
-            const textElements = document.querySelectorAll(
-                '.prose p, .prose span, .prose div, .answer p, .answer span, .answer div, ' +
-                '[data-testid="answer"] p, [data-testid="answer"] span, [data-testid="answer"] div, ' +
-                'p, span, div, h1, h2, h3, h4, h5, h6, li'
-            );
-
-            let recheckCount = 0;
-            const maxRecheck = 60; // محدودیت برای Perplexity
-
-            textElements.forEach(element => {
-                if (recheckCount >= maxRecheck) return;
-
-                const text = this.getCleanText(element);
-                if (!text || text.length < 1) return;
-
-                // اگر عنصر attribute ندارد اما متن فارسی دارد
-                if (!element.hasAttribute('data-ai-rtl-persian-text') && 
-                    !element.hasAttribute('data-ai-rtl-english-text')) {
-                    
-                    // بررسی کش برای بازیابی حالت قبلی
-                    if (this.isElementAlreadyProcessed(element, text)) {
-                        recheckCount++;
-                        return;
-                    }
-
-                    // اگر متن فارسی دارد، پردازش کن
-                    if (this.hasAnyPersianChar(text)) {
-                        this.processElement(element);
-                        recheckCount++;
-                    }
-                }
-            });
-
-            if (recheckCount > 0) {
-                console.log(`RTL AI Studio: Rechecked ${recheckCount} elements in Perplexity`);
-            }
-        } catch (error) {
-            console.error('Error in recheckPerplexityElements:', error);
-        }
+        });
     }
 
     // تشخیص نیاز به اسکن کامل در Perplexity
@@ -1431,68 +1395,7 @@ class RTLAIStudioManager {
 
     // مونیتورینگ ویژه ChatGPT
     setupChatGPTSpecialMonitoring() {
-        if (this.chatGPTTimer) clearInterval(this.chatGPTTimer);
-        
-        this.chatGPTTimer = setInterval(() => {
-            this.processChatGPTSpecialElements();
-            this.processInputs(document);
-            this.recheckChatGPTElements(); // بررسی مجدد عناصر
-        }, 1000); // فرکانس متوسط برای ChatGPT
-
-        // تایمر اضطراری برای ChatGPT
-        this.chatGPTEmergencyTimer = setInterval(() => {
-            if (this.config.isEnabled && this.isSiteEnabled() && this.isChatGPT) {
-                this.aggressiveAIStudioRecheck();
-            }
-        }, 8000); // هر 8 ثانیه اسکن کامل
-    }
-
-    // بررسی مجدد عناصر موجود در ChatGPT
-    recheckChatGPTElements() {
-        if (!this.isChatGPT) return;
-
-        try {
-            const textElements = document.querySelectorAll(
-                '[data-testid="conversation-turn"] p, [data-testid="conversation-turn"] span, ' +
-                '[data-testid="conversation-turn"] div, [data-message-author-role] p, ' +
-                '[data-message-author-role] span, [data-message-author-role] div, ' +
-                '.markdown p, .markdown span, .markdown div, ' +
-                'p, span, div, h1, h2, h3, h4, h5, h6, li'
-            );
-
-            let recheckCount = 0;
-            const maxRecheck = 70; // محدودیت برای ChatGPT
-
-            textElements.forEach(element => {
-                if (recheckCount >= maxRecheck) return;
-
-                const text = this.getCleanText(element);
-                if (!text || text.length < 1) return;
-
-                // اگر عنصر attribute ندارد اما متن فارسی دارد
-                if (!element.hasAttribute('data-ai-rtl-persian-text') && 
-                    !element.hasAttribute('data-ai-rtl-english-text')) {
-                    
-                    // بررسی کش برای بازیابی حالت قبلی
-                    if (this.isElementAlreadyProcessed(element, text)) {
-                        recheckCount++;
-                        return;
-                    }
-
-                    // اگر متن فارسی دارد، پردازش کن
-                    if (this.hasAnyPersianChar(text)) {
-                        this.processElement(element);
-                        recheckCount++;
-                    }
-                }
-            });
-
-            if (recheckCount > 0) {
-                console.log(`RTL AI Studio: Rechecked ${recheckCount} elements in ChatGPT`);
-            }
-        } catch (error) {
-            console.error('Error in recheckChatGPTElements:', error);
-        }
+        this._setupSiteMonitoring('ChatGPT', 'processChatGPTSpecialElements', 1000, 8000);
     }
 
     // پردازش عناصر ویژه ChatGPT
@@ -1594,8 +1497,7 @@ class RTLAIStudioManager {
     // پوشش عمومی: هر چند ثانیه یک بار، تمام ادیتورهای احتمالی جدید را بررسی کن
     startGlobalComposerSweep() {
         try {
-            if (this.globalComposerTimer) clearInterval(this.globalComposerTimer);
-            this.globalComposerTimer = setInterval(() => {
+            this.setTimer('globalComposer', () => {
                 try { this.processInputs(document); } catch (_) {}
             }, 3000);
         } catch (_) {}
@@ -2316,9 +2218,14 @@ class RTLAIStudioManager {
             await this.immediateProcessAllContent();
             
             this.startInputMonitoring();
-            if (this.isAIStudio) this.setupAIStudioSpecialMonitoring();
-            if (this.isPerplexity) this.setupPerplexitySpecialMonitoring();
-            if (this.isChatGPT) this.setupChatGPTSpecialMonitoring();
+            if (this.isAIStudio) this._setupSiteMonitoring('AIStudio', 'processAIStudioSpecialElements', 500, 3000);
+            if (this.isPerplexity) this._setupSiteMonitoring('Perplexity', 'processPerplexitySpecialElements', 800, 5000, () => {
+                if (this.shouldPerformPerplexityFullScan()) {
+                    console.log('RTL AI Studio: Performing Perplexity full scan due to long chat');
+                    setTimeout(() => this.performFullPageScan(), 500);
+                }
+            });
+            if (this.isChatGPT) this._setupSiteMonitoring('ChatGPT', 'processChatGPTSpecialElements', 1000, 8000);
             
             // پردازش چندباره برای اطمینان
             setTimeout(() => this.immediateProcessAllContent(), 200);
@@ -2351,18 +2258,11 @@ class RTLAIStudioManager {
     cleanup() {
         if (this.observer) { this.observer.disconnect(); this.observer = null; }
         if (this.inputCheckTimer) { clearInterval(this.inputCheckTimer); this.inputCheckTimer = null; }
-        if (this.aiStudioTimer) { clearInterval(this.aiStudioTimer); this.aiStudioTimer = null; }
-        if (this.aiStudioEmergencyTimer) { clearInterval(this.aiStudioEmergencyTimer); this.aiStudioEmergencyTimer = null; }
-        if (this.perplexityTimer) { clearInterval(this.perplexityTimer); this.perplexityTimer = null; }
-        if (this.perplexityEmergencyTimer) { clearInterval(this.perplexityEmergencyTimer); this.perplexityEmergencyTimer = null; }
-        if (this.chatGPTTimer) { clearInterval(this.chatGPTTimer); this.chatGPTTimer = null; }
-        if (this.chatGPTEmergencyTimer) { clearInterval(this.chatGPTEmergencyTimer); this.chatGPTEmergencyTimer = null; }
         if (this.mutationDebounceTimer) { clearTimeout(this.mutationDebounceTimer); this.mutationDebounceTimer = null; }
         if (this.intersectionObserverTimer) { clearInterval(this.intersectionObserverTimer); this.intersectionObserverTimer = null; }
         
-        // پاک کردن timers تکی که در this.timers Map ذخیره نشده‌اند
-        if (this.globalComposerTimer) { clearInterval(this.globalComposerTimer); this.globalComposerTimer = null; }
-        if (this.spaPollTimer) { clearInterval(this.spaPollTimer); this.spaPollTimer = null; }
+        // Clear all timers managed by the timers Map (consolidated via DRY refactor)
+        this.clearAllTimers();
         
         // پاک کردن aiStudioMutationObserver
         if (this.aiStudioMutationObserver) {
@@ -2378,9 +2278,6 @@ class RTLAIStudioManager {
         if (this._spaOnUrlChanged) {
             window.removeEventListener('urlchange', this._spaOnUrlChanged);
         }
-        
-        // بهینه‌سازی: پاک کردن همه timers با timer manager
-        this.clearAllTimers();
 
         // حذف IntersectionObserver
         if (this.intersectionObserver) {
