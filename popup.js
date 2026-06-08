@@ -172,13 +172,10 @@ class PopupManagerInstantTrigger {
             this.enabledSites = new Set(settings.enabledSites || []);
             this.lastSettings = { ...settings };
             
-            this.safeSetElementProperty('mainToggle', 'checked', settings.isEnabled);
             this.safeSetElementProperty('fontSelect', 'value', settings.selectedFont);
             this.safeSetElementProperty('fontSizeSelect', 'value', settings.fontSize);
             this.safeSetElementProperty('detectionMode', 'value', settings.detectionMode);
 
-
-            this.updateUI(settings.isEnabled);
             this.updateCurrentSiteDisplay();
             this.updateSitesList();
             
@@ -318,7 +315,6 @@ class PopupManagerInstantTrigger {
             const sitesHTML = sitesArray.map(site => {
                 const isDefault = ['aistudio.google.com', 'makersuite.google.com', 'perplexity.ai']
                     .some(defaultSite => site.includes(defaultSite));
-                const checked = this.enabledSites.has(site) ? 'checked' : '';
                 return `
                     <div class="site-item" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-bottom: 1px solid #e9ecef; font-size: 11px;">
                         <span style="flex: 1; word-break: break-all; color: #495057; ${isDefault ? 'font-weight: bold; color: #007bff;' : ''}">${this.escapeHtml(site)}</span>
@@ -381,16 +377,6 @@ class PopupManagerInstantTrigger {
                 await this.updateSetting('fontSize', e.target.value);
                 await this.triggerImmediateApply();
                 this.showSuccessMessage('سایز فونت تغییر کرد');
-            });
-
-            this.addSafeEventListener('textOnlyMode', 'change', async (e) => {
-                await this.updateSetting('textOnlyMode', e.target.checked);
-                await this.triggerImmediateApply();
-            });
-
-            this.addSafeEventListener('includeNotes', 'change', async (e) => {
-                await this.updateSetting('includeNotes', e.target.checked);
-                await this.triggerImmediateApply();
             });
 
             this.addSafeEventListener('detectionMode', 'change', async (e) => {
@@ -813,21 +799,6 @@ class PopupManagerInstantTrigger {
             }
         } catch (error) {
             this.logError('Error displaying stats', error);
-        }
-    }
-
-    updateUI(isEnabled) {
-        try {
-            const settingsPanel = this.elements.settingsPanel;
-            if (settingsPanel) {
-                if (isEnabled) {
-                    settingsPanel.classList.remove('disabled-overlay');
-                } else {
-                    settingsPanel.classList.add('disabled-overlay');
-                }
-            }
-        } catch (error) {
-            this.logError('Error updating UI', error);
         }
     }
 

@@ -19,6 +19,7 @@ class RTLAIStudioManager {
         this.perplexityTimer = null;
         this.aiStudioMutationObserver = null;
         this.heartbeatInterval = null;
+        this.globalComposerTimer = null;
         this.forceProcessingTimer = null; // اضافه کردن timer اجباری
         this.enableSitePollTimer = null; // بررسی دوره‌ای فعال بودن سایت در تب‌های جدید
         this.hasInitialized = false; // پرچم شروع موفق
@@ -467,30 +468,11 @@ class RTLAIStudioManager {
             'div[data-ai-rtl-persian-text="true"]'
         ];
 
-        const englishElements = [
-            'p[data-ai-rtl-english-text="true"]',
-            'span[data-ai-rtl-english-text="true"]',
-            'h1[data-ai-rtl-english-text="true"]', 'h2[data-ai-rtl-english-text="true"]', 'h3[data-ai-rtl-english-text="true"]',
-            'h4[data-ai-rtl-english-text="true"]', 'h5[data-ai-rtl-english-text="true"]', 'h6[data-ai-rtl-english-text="true"]',
-            'li[data-ai-rtl-english-text="true"]',
-            'td[data-ai-rtl-english-text="true"]',
-            'th[data-ai-rtl-english-text="true"]',
-            'blockquote[data-ai-rtl-english-text="true"]',
-            'div[data-ai-rtl-english-text="true"]'
-        ];
-
         const persianInputs = [
             'input[data-ai-rtl-persian-input="true"]',
             'textarea[data-ai-rtl-persian-input="true"]',
             '[contenteditable="true"][data-ai-rtl-persian-input="true"]',
             '[role="textbox"][data-ai-rtl-persian-input="true"]'
-        ];
-
-        const englishInputs = [
-            'input[data-ai-rtl-english-input="true"]',
-            'textarea[data-ai-rtl-english-input="true"]',
-            '[contenteditable="true"][data-ai-rtl-english-input="true"]',
-            '[role="textbox"][data-ai-rtl-english-input="true"]'
         ];
 
         const perplexitySpecialElements = [
@@ -540,17 +522,22 @@ class RTLAIStudioManager {
                 unicode-bidi: isolate !important;
             }
 
+            /* Persian List Containers - RTL-aware padding */
+            [data-ai-rtl-persian-text="true"] ol,
+            [data-ai-rtl-persian-text="true"] ul,
+            [data-ai-rtl-persian-text="true"] [role="list"],
+            [data-ai-rtl-persian-text="true"] [role="listbox"] {
+                padding-inline-start: 1.5em !important;
+                padding-inline-end: 0 !important;
+            }
+            
+
+            
+
             /* Persian Text Children (excluding code elements) */
             [data-ai-rtl-persian-text="true"] *:not(code):not(pre):not([class*="language-"]) {
                 ${fontFamilyCSS}
                 ${fontSizeCSS}
-            }
-            
-            /* English Text Elements */
-            ${englishElements.join(',\n            ')} {
-                direction: ltr !important;
-                text-align: left !important;
-                unicode-bidi: isolate !important;
             }
             
             /* Persian Input Elements */
@@ -559,13 +546,6 @@ class RTLAIStudioManager {
                 text-align: right !important;
                 ${fontFamilyCSS}
                 ${fontSizeCSS}
-                unicode-bidi: isolate !important;
-            }
-            
-            /* English Input Elements */
-            ${englishInputs.join(',\n            ')} {
-                direction: ltr !important;
-                text-align: left !important;
                 unicode-bidi: isolate !important;
             }
             
@@ -1211,14 +1191,14 @@ class RTLAIStudioManager {
             this.processAIStudioSpecialElements();
             this.processInputs(document);
             this.recheckAIStudioElements(); // بررسی مجدد عناصر موجود
-        }, 200); // فرکانس بالا برای واکنش فوری در AI Studio
+        }, 500); // فرکانس بالا برای واکنش فوری در AI Studio
 
         // تایمر اضطراری برای اسکن کامل
         this.aiStudioEmergencyTimer = setInterval(() => {
             if (this.config.isEnabled && this.isSiteEnabled()) {
                 this.aggressiveAIStudioRecheck();
             }
-        }, 2000); // هر 2 ثانیه اسکن کامل
+        }, 3000); // هر 3 ثانیه اسکن کامل
     }
 
     // بررسی مجدد عناصر موجود در AI Studio برای رفع مشکل فراموشی
@@ -1379,14 +1359,14 @@ class RTLAIStudioManager {
                 console.log('RTL AI Studio: Performing Perplexity full scan due to long chat');
                 setTimeout(() => this.performFullPageScan(), 500);
             }
-        }, 300); // فرکانس بالاتر برای واکنش بهتر
+        }, 800); // فرکانس بالاتر برای واکنش بهتر
 
         // تایمر اضطراری برای Perplexity
         this.perplexityEmergencyTimer = setInterval(() => {
             if (this.config.isEnabled && this.isSiteEnabled() && this.isPerplexity) {
                 this.aggressiveAIStudioRecheck();
             }
-        }, 2500); // هر 2.5 ثانیه اسکن کامل
+        }, 5000); // هر 5 ثانیه اسکن کامل
     }
 
     // بررسی مجدد عناصر موجود در Perplexity
@@ -1457,14 +1437,14 @@ class RTLAIStudioManager {
             this.processChatGPTSpecialElements();
             this.processInputs(document);
             this.recheckChatGPTElements(); // بررسی مجدد عناصر
-        }, 350); // فرکانس متوسط برای ChatGPT
+        }, 1000); // فرکانس متوسط برای ChatGPT
 
         // تایمر اضطراری برای ChatGPT
         this.chatGPTEmergencyTimer = setInterval(() => {
             if (this.config.isEnabled && this.isSiteEnabled() && this.isChatGPT) {
                 this.aggressiveAIStudioRecheck();
             }
-        }, 3000); // هر 3 ثانیه اسکن کامل
+        }, 8000); // هر 8 ثانیه اسکن کامل
     }
 
     // بررسی مجدد عناصر موجود در ChatGPT
@@ -1617,54 +1597,8 @@ class RTLAIStudioManager {
             if (this.globalComposerTimer) clearInterval(this.globalComposerTimer);
             this.globalComposerTimer = setInterval(() => {
                 try { this.processInputs(document); } catch (_) {}
-            }, 1500);
+            }, 3000);
         } catch (_) {}
-    }
-
-
-
-    processPerplexitySpecialElements() {
-        const perplexityTargets = document.querySelectorAll(
-            '.prose p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.prose span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.answer p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.answer span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-testid="answer"] p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-testid="answer"] span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-cplx-component="message-block-answer"] p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-cplx-component="message-block-answer"] span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.max-w-threadContentWidth p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.max-w-threadContentWidth span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.group\\/query p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.group\\/query span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            'textarea[aria-label*="Ask" i], textarea[aria-label*="type" i], [role="textbox"]'
-        );
-
-        let processed = 0;
-        perplexityTargets.forEach(element => {
-            if (element.tagName === 'TEXTAREA' || element.getAttribute('role') === 'textbox' || element.matches('[contenteditable="true"]')) {
-                const leaf = this.findEditableLeaf(element);
-                if (leaf && !this.stableElements.has(leaf)) {
-                    this.setupSmartInputHandler(leaf);
-                    this.stableElements.add(leaf);
-                    processed++;
-                }
-            } else {
-                if (this.isSafeElementForProcessing(element) && !this.stableElements.has(element)) {
-                    this.processElement(element);
-                    if (this.processedElements.has(element)) {
-                        this.stableElements.add(element);
-                        processed++;
-                    }
-                }
-            }
-        });
-
-        if (processed > 0) {
-            console.log(`RTL AI Studio: Processed ${processed} Perplexity elements`);
-        }
-
-        this.processInputs(document);
     }
 
         // کاهش محدودیت برای پردازش بیشتر
@@ -1687,13 +1621,12 @@ class RTLAIStudioManager {
         // کاهش محدودیت layout container
         if (this.isLayoutContainer(element) && element.tagName !== 'DIV') return false;
 
-        // استثنای عناصر ساختاری در Perplexity (اجازه بده بخش‌های اصلی عبور کنند)
-        if (this.isPerplexity) {
-            const inSidebar = element.closest('aside, [data-testid="sidebar"], [class*="sidebar" i]');
-            const inNav = element.closest('nav, header, footer');
-            if (inSidebar || inNav) return false;
+        // فیلتر سایدبار، ناوبری، هدر و فوتر برای همه سایت‌ها - فقط پنجره اصلی چت پردازش شود
+        const inSidebarOrNav = element.closest('aside, [data-testid="sidebar"], [class*="sidebar" i], [class*="side-panel" i], nav, header, footer, [role="navigation"], [role="banner"]');
+        if (inSidebarOrNav) return false;
 
-            // اجازه پردازش برای عناصر محتوای متن داخل این بلوک‌ها (اصلی، عنوان، و کارت پاسخ)
+        // برای Perplexity محدود به بخش محتوای اصلی چت
+        if (this.isPerplexity) {
             const inMain = element.closest(
                 '.prose, .answer, [data-testid="answer"], [data-cplx-component="message-block-answer"], .markdown, .markdown-content, .group\\/query, .max-w-threadContentWidth'
             );
@@ -1751,12 +1684,6 @@ class RTLAIStudioManager {
         if (!this.config.isEnabled || !this.isSafeElementForProcessing(element)) return;
 
         try {
-            // محدودسازی ویژه برای Perplexity: تنها سایدبار/ناوبری را کنار بگذار
-            if (this.isPerplexity) {
-                const inSidebar = element.closest('aside, [data-testid="sidebar"], [class*="sidebar" i]');
-                const inNav = element.closest('nav, header, footer');
-                if (inSidebar || inNav) return;
-            }
 
             const text = this.getCleanText(element);
             if (!text || text.length < 1) return;
@@ -1779,12 +1706,34 @@ class RTLAIStudioManager {
             }
 
             if (language === 'persian') {
+                // If this is a list item, also style its parent ol/ul for proper RTL bullet positioning
+                if (element.tagName === 'LI') {
+                    try {
+                        // Find parent list container (native or custom role-based)
+                        const parentList = element.closest('ol, ul, [role="list"], [role="listbox"]');
+                        if (parentList && !this.stableElements.has(parentList)) {
+                            parentList.style.setProperty('padding-inline-start', '1.5em', 'important');
+                            parentList.style.setProperty('padding-left', '0', 'important');
+                            parentList.style.setProperty('direction', 'rtl', 'important');
+                            this.stableElements.add(parentList);
+                        }
+                        // Also set inline list-style on the li for max specificity
+                        if (!this.isChatGPT) {
+                            element.style.setProperty('list-style-position', 'inside', 'important');
+                        }
+                    } catch (_) {}
+                }
+
                 if (this.isAbsolutelySafeForRTL(element)) {
                     element.setAttribute('data-ai-rtl-persian-text', 'true');
                     element.removeAttribute('data-ai-rtl-english-text');
                     this.processedElements.set(element, { processed: true, language: 'persian' });
                     this.cacheProcessedElement(element, text, 'persian'); // ذخیره در کش
                     this.stats.processedCount++;
+                    // For list items, add inline padding to ensure bullet area on right
+                    if (element.tagName === 'LI') {
+                        element.style.setProperty('padding-inline-start', '1.5em', 'important');
+                    }
                     if (this.isPerplexity) {
                         try {
                             const fontFamily = this.getFontFamily();
@@ -1796,19 +1745,6 @@ class RTLAIStudioManager {
                             if (fontSize) element.style.setProperty('font-size', fontSize, 'important');
                         } catch (_) {}
                     }
-                }
-            } else if (language === 'english') {
-                element.setAttribute('data-ai-rtl-english-text', 'true');
-                element.removeAttribute('data-ai-rtl-persian-text');
-                this.processedElements.set(element, { processed: true, language: 'english' });
-                this.cacheProcessedElement(element, text, 'english'); // ذخیره در کش
-                if (this.isPerplexity) {
-                    try {
-                        element.style.setProperty('direction', 'ltr', 'important');
-                        element.style.setProperty('text-align', 'left', 'important');
-                        element.style.removeProperty('font-family');
-                        element.style.removeProperty('font-size');
-                    } catch (_) {}
                 }
             } else {
                 element.removeAttribute('data-ai-rtl-persian-text');
@@ -1906,20 +1842,17 @@ class RTLAIStudioManager {
                     if (this.isChatGPT) {
                         this.applyChatGPTInputFixes(input);
                     }
-                } else if (language === 'english') {
-                    input.setAttribute('data-ai-rtl-english-input', 'true');
-                    input.removeAttribute('data-ai-rtl-persian-input');
-                    input.style.setProperty('direction', 'ltr', 'important');
-                    input.style.setProperty('text-align', 'left', 'important');
-                    input.style.setProperty('unicode-bidi', 'isolate', 'important');
-                    input.style.removeProperty('font-family');
-                    input.style.removeProperty('font-size');
                 } else {
                     input.removeAttribute('data-ai-rtl-persian-input');
                     input.removeAttribute('data-ai-rtl-english-input');
-                    // حالت unknown → پیش‌فرض LTR برای مانع نشدن از تایپ انگلیسی کوتاه
-                    input.style.setProperty('direction', hasPersian ? 'rtl' : 'ltr', 'important');
-                    input.style.setProperty('text-align', hasPersian ? 'right' : 'left', 'important');
+                    // برای متن غیر فارسی: استایل‌های سفارشی را حذف کن تا مرورگر پیش‌فرض را اعمال کند
+                    if (hasPersian) {
+                        input.style.setProperty('direction', 'rtl', 'important');
+                        input.style.setProperty('text-align', 'right', 'important');
+                    } else {
+                        input.style.removeProperty('direction');
+                        input.style.removeProperty('text-align');
+                    }
                     input.style.setProperty('unicode-bidi', 'isolate', 'important');
                     input.style.removeProperty('font-family');
                     input.style.removeProperty('font-size');
@@ -1972,15 +1905,15 @@ class RTLAIStudioManager {
                     wrapper.style.setProperty('unicode-bidi', 'isolate', 'important');
                     if (fontFamily) wrapper.style.setProperty('font-family', fontFamily, 'important');
                     if (fontSize) wrapper.style.setProperty('font-size', fontSize, 'important');
-                } else if (language === 'english') {
-                    wrapper.style.setProperty('direction', 'ltr', 'important');
-                    wrapper.style.setProperty('text-align', 'left', 'important');
-                    wrapper.style.setProperty('unicode-bidi', 'isolate', 'important');
-                    wrapper.style.removeProperty('font-family');
-                    wrapper.style.removeProperty('font-size');
                 } else {
-                    wrapper.style.setProperty('direction', hasPersian ? 'rtl' : 'ltr', 'important');
-                    wrapper.style.setProperty('text-align', hasPersian ? 'right' : 'left', 'important');
+                    // برای متن غیر فارسی: استایل‌های سفارشی را حذف کن
+                    if (hasPersian) {
+                        wrapper.style.setProperty('direction', 'rtl', 'important');
+                        wrapper.style.setProperty('text-align', 'right', 'important');
+                    } else {
+                        wrapper.style.removeProperty('direction');
+                        wrapper.style.removeProperty('text-align');
+                    }
                     wrapper.style.setProperty('unicode-bidi', 'isolate', 'important');
                 }
             });
@@ -2142,11 +2075,6 @@ class RTLAIStudioManager {
                 const fontSize = this.getFontSize();
                 if (fontFamily) element.style.setProperty('font-family', fontFamily, 'important');
                 if (fontSize) element.style.setProperty('font-size', fontSize, 'important');
-            } else if (cachedData.language === 'english') {
-                element.setAttribute('data-ai-rtl-english-text', 'true');
-                element.style.setProperty('direction', 'ltr', 'important');
-                element.style.setProperty('text-align', 'left', 'important');
-                element.style.setProperty('unicode-bidi', 'isolate', 'important');
             }
 
             console.log('RTL AI Studio: Reapplied cached state for element');
@@ -2251,9 +2179,9 @@ class RTLAIStudioManager {
         if (this.inputCheckTimer) clearInterval(this.inputCheckTimer);
 
         // فرکانس بالاتر برای سایت‌های چت
-        const checkInterval = this.isAIStudio ? 300 : 
-                             this.isChatGPT ? 400 : 
-                             this.isPerplexity ? 450 : 500;
+        const checkInterval = this.isAIStudio ? 600 : 
+                             this.isChatGPT ? 700 : 
+                             this.isPerplexity ? 800 : 1000;
         this.inputCheckTimer = setInterval(() => {
             this.processInputs(document);
         }, checkInterval);
@@ -2432,6 +2360,25 @@ class RTLAIStudioManager {
         if (this.mutationDebounceTimer) { clearTimeout(this.mutationDebounceTimer); this.mutationDebounceTimer = null; }
         if (this.intersectionObserverTimer) { clearInterval(this.intersectionObserverTimer); this.intersectionObserverTimer = null; }
         
+        // پاک کردن timers تکی که در this.timers Map ذخیره نشده‌اند
+        if (this.globalComposerTimer) { clearInterval(this.globalComposerTimer); this.globalComposerTimer = null; }
+        if (this.spaPollTimer) { clearInterval(this.spaPollTimer); this.spaPollTimer = null; }
+        
+        // پاک کردن aiStudioMutationObserver
+        if (this.aiStudioMutationObserver) {
+            this.aiStudioMutationObserver.disconnect();
+            this.aiStudioMutationObserver = null;
+        }
+        
+        // پاک کردن SPA event listeners
+        if (this._spaOnPopState) {
+            window.removeEventListener('popstate', this._spaOnPopState);
+            window.removeEventListener('hashchange', this._spaOnHashChange);
+        }
+        if (this._spaOnUrlChanged) {
+            window.removeEventListener('urlchange', this._spaOnUrlChanged);
+        }
+        
         // بهینه‌سازی: پاک کردن همه timers با timer manager
         this.clearAllTimers();
 
@@ -2527,23 +2474,23 @@ class RTLAIStudioManager {
                     dispatchUrlChange();
                     return ret;
                 };
-                window.addEventListener('popstate', dispatchUrlChange);
-                window.addEventListener('hashchange', dispatchUrlChange);
+                window.addEventListener('popstate', this._spaOnPopState = dispatchUrlChange);
+                window.addEventListener('hashchange', this._spaOnHashChange = dispatchUrlChange);
                 window.__rtlHistoryPatched = true;
             }
 
-            const onUrlChanged = () => {
+            this._spaOnUrlChanged = () => {
                 if (location.href !== this.lastUrl) {
                     this.lastUrl = location.href;
                     console.log('RTL AI Studio: URL changed (event), full reload');
                     try { this.fullReload(); } catch (_) { setTimeout(() => this.fullReload(), 150); }
                 }
             };
-            window.addEventListener('urlchange', onUrlChanged);
+            window.addEventListener('urlchange', this._spaOnUrlChanged);
         } catch (_) {}
 
         // Polling fallback
-        setInterval(() => {
+        this.spaPollTimer = setInterval(() => {
             if (location.href !== this.lastUrl) {
                 console.log('RTL AI Studio: URL changed (poll), full reload');
                 this.lastUrl = location.href;
