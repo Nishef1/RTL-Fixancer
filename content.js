@@ -161,7 +161,7 @@ class RTLAIStudioManager {
                     this.forceReprocessUnprocessedContent();
                 }
             }
-        }, 2000);
+        }, 3000);
     }
 
     // پردازش اجباری محتوای پردازش نشده - بهینه‌سازی شده با caching
@@ -211,6 +211,20 @@ class RTLAIStudioManager {
         }
     }
 
+    // Cache isSafeElementForProcessing results so the same element is not re-validated every tick.
+    isSafeCache = new WeakMap();
+
+    isSafeElementForProcessingCached(element) {
+        if (!element || !element.tagName) return false;
+        if (this.processedElements.has(element)) return false;
+        if (this.stableElements.has(element)) return false;
+        const cached = this.isSafeCache.get(element);
+        if (cached !== undefined) return cached;
+        const result = this.isSafeElementForProcessing(element);
+        this.isSafeCache.set(element, result);
+        return result;
+    }
+
     // بهینه‌سازی querySelector با استفاده از CSS selectors سریعتر
     getElementsForProcessing() {
         // Comprehensive tag list: includes a, button, label, option, figcaption, summary, em, strong, etc.
@@ -239,11 +253,15 @@ class RTLAIStudioManager {
             '.prose', '.markdown', '.chat-message', '.message-content',
             '[data-testid="message-content"]', '.assistant-message', '.user-message'
         ];
-        
+
         const elements = document.querySelectorAll(chatSelectors.join(', '));
-        const unprocessed = Array.from(elements).filter(el => 
-            this.isSafeElementForProcessing(el) && !this.isElementProcessed(el)
-        );
+        const unprocessed = [];
+        for (let i = 0; i < elements.length; i++) {
+            const el = elements[i];
+            if (el.hasAttribute('data-ai-rtl-persian-text') || el.hasAttribute('data-ai-rtl-english-text')) continue;
+            if (this.stableElements.has(el)) continue;
+            if (this.isSafeElementForProcessingCached(el)) unprocessed.push(el);
+        }
 
         // پردازش در batch‌های کوچک
         const batchSize = 20;
@@ -661,6 +679,8 @@ class RTLAIStudioManager {
 
         let processed = 0;
         perplexityTargets.forEach(element => {
+            if (element.hasAttribute('data-ai-rtl-persian-text') || element.hasAttribute('data-ai-rtl-english-text')) return;
+            if (this.stableElements.has(element)) return;
             if (element.tagName === 'TEXTAREA' || element.getAttribute('role') === 'textbox' || element.matches('[contenteditable="true"]')) {
                 const leaf = this.findEditableLeaf(element);
                 if (leaf && !this.stableElements.has(leaf)) {
@@ -726,7 +746,8 @@ class RTLAIStudioManager {
                     if (this.isScrollContainer(mutation.target) && !this.isSpecialChatSite()) return false;
                     return true;
                 }
-                // بهبود: تغییر متن موجود را در همه سایت‌های چت پردازش کن
+                // characterData is no longer observed (see setupSmartObserver), but keep this branch
+                // as a safety net in case it is re-enabled.
                 if (this.isSpecialChatSite() && mutation.type === 'characterData') {
                     const targetNode = mutation.target;
                     const el = targetNode.nodeType === Node.TEXT_NODE ? targetNode.parentElement : targetNode;
@@ -758,10 +779,12 @@ class RTLAIStudioManager {
             }, 50); // کاهش delay برای پاسخ سریعتر
         });
 
+        // characterData is removed from the main observer to avoid the cost of firing on every keystroke.
+        // The AI Studio dedicated observer (setupAIStudioMutationObserver) handles text changes for that site.
         this.observer.observe(document.body, {
             childList: true,
             subtree: true,
-            characterData: this.isSpecialChatSite()
+            characterData: false
         });
 
         // اضافه کردن scroll event listener برای محتوای lazy-loaded
@@ -956,11 +979,7 @@ class RTLAIStudioManager {
         if (!this.intersectionObserver) return;
 
         try {
-            // Comprehensive tag list (excludes div which has a separate block-child guard)
-            const _tagsObs = TEXT_TAGS_SELECTOR;
-            const unprocessedElements = document.querySelectorAll(
-                _tagsObs.split(',').map(t => t.trim() + ':not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])').join(', ')
-            );
+            const unprocessedElements = document.querySelectorAll(TEXT_TAGS_NEG_SELECTOR);
 
             // محدود کردن تعداد عناصر observe شده
             let observeCount = 0;
@@ -990,11 +1009,7 @@ class RTLAIStudioManager {
         try {
             
             
-            // Comprehensive tag list — picks up a, button, label, figcaption, summary, em, strong, etc.
-            const _tagsFull = TEXT_TAGS_SELECTOR;
-            const allElements = document.querySelectorAll(
-                _tagsFull.split(',').map(t => t.trim() + ':not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])').join(', ')
-            );
+            const allElements = document.querySelectorAll(TEXT_TAGS_NEG_SELECTOR);
 
             let processedCount = 0;
             const batchSize = 50; // پردازش در دسته‌های کوچک
@@ -1534,7 +1549,11 @@ class RTLAIStudioManager {
     }
 
     processElement(element) {
-        if (!this.config.isEnabled || !this.isSafeElementForProcessing(element)) return;
+        if (!this.config.isEnabled) return;
+        // Early exit: already tagged
+        if (element.hasAttribute('data-ai-rtl-persian-text') || element.hasAttribute('data-ai-rtl-english-text')) return;
+        if (this.stableElements.has(element)) return;
+        if (!this.isSafeElementForProcessing(element)) return;
 
         try {
 
