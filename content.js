@@ -291,8 +291,7 @@ class RTLAIStudioManager {
                 if (this.isAIStudio) this._setupSiteMonitoring('AIStudio', 'processAIStudioSpecialElements', 500, 3000);
                 if (this.isPerplexity) this._setupSiteMonitoring('Perplexity', 'processPerplexitySpecialElements', 800, 5000, () => {
                     if (this.shouldPerformPerplexityFullScan()) {
-                        console.log('RTL AI Studio: Performing Perplexity full scan due to long chat');
-                        setTimeout(() => this.performFullPageScan(), 500);
+                                setTimeout(() => this.performFullPageScan(), 500);
                     }
                 });
                 if (this.isChatGPT) this._setupSiteMonitoring('ChatGPT', 'processChatGPTSpecialElements', 1000, 8000);
@@ -314,7 +313,7 @@ class RTLAIStudioManager {
     // پردازش فوری تمام محتوا - بهینه‌سازی شده
     async immediateProcessAllContent() {
         try {
-            console.log('RTL AI Studio: Immediate processing started');
+            
             
             // استفاده از CSS selectors بهینه و cache شده
             const selectors = [
@@ -364,7 +363,7 @@ class RTLAIStudioManager {
             }
 
             this.stats.immediateProcessing++;
-            console.log(`RTL AI Studio: Immediate processing completed - ${processedCount} elements processed`);
+            
             
         } catch (error) {
             console.error('Immediate processing error:', error);
@@ -574,7 +573,7 @@ class RTLAIStudioManager {
             const fonts = ['VazirAIStudio', 'ShabnamAIStudio'];
             const promises = fonts.map(fontName => {
                 return document.fonts.load(`16px ${fontName}`).then(() => {
-                    console.log(`RTL AI Studio: Font ${fontName} loaded successfully`);
+                    
                     return true;
                 }).catch(() => {
                     console.warn(`RTL AI Studio: Font ${fontName} failed to load`);
@@ -584,7 +583,7 @@ class RTLAIStudioManager {
 
             const results = await Promise.all(promises);
             const successCount = results.filter(Boolean).length;
-            console.log(`RTL AI Studio: ${successCount}/${fonts.length} fonts loaded successfully`);
+            
             
             // اگر هیچ فونتی لود نشد، از فونت‌های پیش‌فرض استفاده کن
             if (successCount === 0) {
@@ -631,7 +630,7 @@ class RTLAIStudioManager {
         });
 
         if (processed > 0) {
-            console.log(`RTL AI Studio: Processed ${processed} AI Studio elements`);
+            
         }
 
         this.processInputs(document);
@@ -676,7 +675,7 @@ class RTLAIStudioManager {
         });
 
         if (processed > 0) {
-            console.log(`RTL AI Studio: Processed ${processed} Perplexity elements`);
+            
         }
 
         this.processInputs(document);
@@ -696,7 +695,7 @@ class RTLAIStudioManager {
             }
         `;
         document.head.appendChild(style);
-        console.log('RTL AI Studio: Applied fallback fonts');
+        
     }
 
     getDetectionThreshold() {
@@ -850,7 +849,7 @@ class RTLAIStudioManager {
             }
 
             if (processed > 0) {
-                console.log(`RTL AI Studio: Processed ${processed} new scroll elements`);
+                
                 this.stats.reprocessingCount++;
             }
 
@@ -877,7 +876,7 @@ class RTLAIStudioManager {
             // اگر 15 ثانیه از آخرین اسکن کامل گذشته
             if (!this.lastFullScanTime || (now - this.lastFullScanTime) > 15000) {
                 this.lastFullScanTime = now;
-                console.log('RTL AI Studio: Scheduling full page scan for long chat');
+                
                 
                 // اسکن کامل را با تأخیر کمتر انجام بده
                 setTimeout(() => {
@@ -982,7 +981,7 @@ class RTLAIStudioManager {
             });
 
             if (observeCount > 0) {
-                console.log(`RTL AI Studio: Observing ${observeCount} elements with IntersectionObserver`);
+                
             }
         } catch (error) {
             console.error('Error observing elements:', error);
@@ -992,7 +991,7 @@ class RTLAIStudioManager {
     // اسکن کامل صفحه برای چت‌های طولانی
     performFullPageScan() {
         try {
-            console.log('RTL AI Studio: Performing full page scan for long chats');
+            
             
             // یافتن همه عناصر متنی بدون محدودیت viewport
             const allElements = document.querySelectorAll(
@@ -1030,7 +1029,7 @@ class RTLAIStudioManager {
                 if (endIndex < allElements.length) {
                     setTimeout(() => processBatch(endIndex), 10);
                 } else {
-                    console.log(`RTL AI Studio: Full page scan completed - ${processedCount} elements processed`);
+                    
                     this.stats.reprocessingCount++;
                 }
             };
@@ -1101,7 +1100,7 @@ class RTLAIStudioManager {
         
         // اگر عناصر زیادی پردازش شدند، احتمالاً محتوای جدید زیادی اضافه شده
         if (processedCount > 10) {
-            console.log('RTL AI Studio: Triggering emergency scan due to high mutation activity');
+            
             setTimeout(() => {
                 this.performFullPageScan();
             }, 2000);
@@ -1110,25 +1109,6 @@ class RTLAIStudioManager {
 
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    processInitialContent() {
-        console.log('RTL AI Studio: Processing initial content');
-        
-        // پردازش گسترده تر
-        document.querySelectorAll('p, span, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, div').forEach(el => {
-            if (this.isSafeElementForProcessing(el)) {
-                this.processElement(el);
-                if (this.processedElements.has(el)) {
-                    this.stableElements.add(el);
-                }
-            }
-        });
-
-        this.processInputs(document);
-        
-        if (this.isAIStudio) setTimeout(() => this.processAIStudioSpecialElements(), 200);
-        if (this.isPerplexity) setTimeout(() => this.processPerplexitySpecialElements(), 200);
     }
 
     processInputs(root = document) {
@@ -1260,15 +1240,11 @@ class RTLAIStudioManager {
             });
 
             if (recheckCount > 0) {
-                console.log('RTL AI Studio: Rechecked ' + recheckCount + ' elements in ' + config.logName);
+                
             }
         } catch (error) {
             console.error('Error in _recheckElements for ' + config.logName + ':', error);
         }
-    }
-
-    setupAIStudioSpecialMonitoring() {
-        this._setupSiteMonitoring('AIStudio', 'processAIStudioSpecialElements', 500, 3000);
     }
 
     // بررسی تهاجمی برای سایت‌های چت پس از اسکرول
@@ -1327,7 +1303,7 @@ class RTLAIStudioManager {
                 const siteName = this.isAIStudio ? 'Google AI Studio' : 
                                this.isPerplexity ? 'Perplexity' : 
                                this.isChatGPT ? 'ChatGPT' : 'Chat Site';
-                console.log(`RTL AI Studio: Aggressively rechecked ${recheckCount} elements in ${siteName}`);
+                
             }
         } catch (error) {
             console.error('Error in aggressiveAIStudioRecheck:', error);
@@ -1371,15 +1347,6 @@ class RTLAIStudioManager {
         }
     }
 
-    setupPerplexitySpecialMonitoring() {
-        this._setupSiteMonitoring('Perplexity', 'processPerplexitySpecialElements', 800, 5000, () => {
-            if (this.shouldPerformPerplexityFullScan()) {
-                console.log('RTL AI Studio: Performing Perplexity full scan due to long chat');
-                setTimeout(() => this.performFullPageScan(), 500);
-            }
-        });
-    }
-
     // تشخیص نیاز به اسکن کامل در Perplexity
     shouldPerformPerplexityFullScan() {
         if (!this.isPerplexity) return false;
@@ -1391,11 +1358,6 @@ class RTLAIStudioManager {
         // اگر صفحه خیلی طولانی است و 20 ثانیه از آخرین اسکن گذشته
         return (scrollHeight > viewportHeight * 3) && 
                (!this.lastFullScanTime || (now - this.lastFullScanTime) > 20000);
-    }
-
-    // مونیتورینگ ویژه ChatGPT
-    setupChatGPTSpecialMonitoring() {
-        this._setupSiteMonitoring('ChatGPT', 'processChatGPTSpecialElements', 1000, 8000);
     }
 
     // پردازش عناصر ویژه ChatGPT
@@ -1991,7 +1953,7 @@ class RTLAIStudioManager {
                 if (fontSize) element.style.setProperty('font-size', fontSize, 'important');
             }
 
-            console.log('RTL AI Studio: Reapplied cached state for element');
+            
         } catch (error) {
             console.error('Error reapplying processed state:', error);
         }
@@ -2083,7 +2045,7 @@ class RTLAIStudioManager {
                 }
             }
 
-            console.log('RTL AI Studio: Applied ChatGPT input fixes');
+            
         } catch (error) {
             console.error('Error applying ChatGPT input fixes:', error);
         }
@@ -2179,7 +2141,7 @@ class RTLAIStudioManager {
         // اعمال به فرزندان عناصر فارسی (به جز کدها)
         document.querySelectorAll('[data-ai-rtl-persian-text="true"] *:not(code):not(pre):not([class*="language-"])').forEach(apply);
 
-        console.log('RTL AI Studio: Font styles updated for existing elements');
+        
     }
 
     // پردازش فوری بدون delay
@@ -2391,7 +2353,7 @@ class RTLAIStudioManager {
             this._spaOnUrlChanged = () => {
                 if (location.href !== this.lastUrl) {
                     this.lastUrl = location.href;
-                    console.log('RTL AI Studio: URL changed (event), full reload');
+                    
                     try { this.fullReload(); } catch (_) { setTimeout(() => this.fullReload(), 150); }
                 }
             };
@@ -2401,7 +2363,7 @@ class RTLAIStudioManager {
         // Polling fallback
         this.spaPollTimer = setInterval(() => {
             if (location.href !== this.lastUrl) {
-                console.log('RTL AI Studio: URL changed (poll), full reload');
+                
                 this.lastUrl = location.href;
                 try { this.fullReload(); } catch (_) { setTimeout(() => this.fullReload(), 150); }
             }
