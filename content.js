@@ -1168,18 +1168,18 @@ class RTLAIStudioManager {
                 logName: 'Google AI Studio'
             },
             'Perplexity': {
-                selectors: '.prose p, .prose span, .prose div, .answer p, .answer span, .answer div, ' +
-                           '[data-testid="answer"] p, [data-testid="answer"] span, [data-testid="answer"] div, ' +
+                selectors: '.prose [data-ai-rtl-persian-text], .answer [data-ai-rtl-persian-text], ' +
+                           '[data-testid="answer"] [data-ai-rtl-persian-text], [data-cplx-component="message-block-answer"] [data-ai-rtl-persian-text], ' +
+                           '.max-w-threadContentWidth [data-ai-rtl-persian-text], .group\\/query [data-ai-rtl-persian-text], ' +
                            TEXT_TAGS_SELECTOR,
                 maxRecheck: 60,
                 logName: 'Perplexity'
             },
             'ChatGPT': {
-                selectors: '[data-testid="conversation-turn"] p, [data-testid="conversation-turn"] span, ' +
-                           '[data-testid="conversation-turn"] div, [data-message-author-role] p, ' +
-                           '[data-message-author-role] span, [data-message-author-role] div, ' +
-                           '.markdown p, .markdown span, .markdown div, ' +
-                           'p, span, div, h1, h2, h3, h4, h5, h6, li',
+                selectors: '[data-testid="conversation-turn"] [data-ai-rtl-persian-text], ' +
+                           '[data-message-author-role] [data-ai-rtl-persian-text], ' +
+                           '.markdown [data-ai-rtl-persian-text], ' +
+                           TEXT_TAGS_SELECTOR,
                 maxRecheck: 70,
                 logName: 'ChatGPT'
             }
