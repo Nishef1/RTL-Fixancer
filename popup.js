@@ -608,37 +608,6 @@ class PopupManagerInstantTrigger {
         }
     }
 
-    async addCurrentSite() {
-        if (!this.currentDomain) {
-            this.showErrorMessage('دامنه سایت فعلی قابل شناسایی نیست');
-            return;
-        }
-
-        try {
-            this.enabledSites.add(this.currentDomain);
-            await this.updateSetting('enabledSites', Array.from(this.enabledSites));
-            
-            // تزریق و فعالسازی فوری
-            await this.injectContentScript();
-            await this.triggerFullReload();
-            
-            this.updateCurrentSiteDisplay();
-            this.updateSitesList();
-            
-            this.showSuccessMessage(`سایت ${this.currentDomain} اضافه و فعال شد`);
-            
-        } catch (error) {
-            this.enabledSites.delete(this.currentDomain);
-            this.logError('Error adding site', error);
-            this.showErrorMessage('خطا در افزودن سایت: ' + error.message);
-        }
-    }
-
-    async removeCurrentSite() {
-        if (!this.currentDomain) return;
-        await this.removeSite(this.currentDomain);
-    }
-
     async removeSite(domain) {
         try {
             this.enabledSites.delete(domain);
@@ -981,9 +950,6 @@ class PopupManagerInstantTrigger {
         }
     }
 
-    getErrorLog() {
-        return this.errors;
-    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -731,6 +731,7 @@ class RTLAIStudioManager {
                     const targetNode = mutation.target;
                     const el = targetNode.nodeType === Node.TEXT_NODE ? targetNode.parentElement : targetNode;
                     if (!el) return false;
+                    // Inline selectors — left here because they are special-chat-only and different from CHAT_CONTAINER_SELECTORS.
                     const chatSelectors = [
                         // AI Studio
                         '.conversation-container', '.chat-message', '.model-response', '.message-content',
@@ -807,12 +808,7 @@ class RTLAIStudioManager {
         
         // برای سایت‌های چت، containers خاص را هم monitor کن
         if (this.isSpecialChatSite()) {
-            const chatContainers = document.querySelectorAll([
-                '.conversation-container', // AI Studio
-                '.max-w-threadContentWidth', // Perplexity
-                '[data-testid="conversation-panel"]', // ChatGPT
-                'main', '[role="main"]' // عمومی
-            ].join(', '));
+            const chatContainers = document.querySelectorAll(CHAT_CONTAINER_SELECTORS);
 
             chatContainers.forEach(container => {
                 if (container && this.isScrollContainer(container)) {
@@ -1555,7 +1551,7 @@ class RTLAIStudioManager {
             // در Perplexity اگر در محتوای اصلی و دارای حروف فارسی باشد، فارسی را بر انگلیسی/نامشخص ترجیح بده
             if (this.isPerplexity) {
                 const inMainContent = element.closest('.prose, .answer, [data-testid="answer"]');
-                const hasPersian = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
+                const hasPersian = PERSIAN_REGEX.test(text);
                 const tagOk = ['P', 'SPAN', 'DIV', 'LI', 'H1', 'H2', 'H3'].includes(element.tagName);
                 if (inMainContent && hasPersian && tagOk) {
                     language = 'persian';
@@ -1618,17 +1614,17 @@ class RTLAIStudioManager {
         const safeTags = ['P', 'SPAN', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TD', 'TH', 'BLOCKQUOTE', 'DIV'];
         if (!safeTags.includes(element.tagName)) return false;
 
+        const children = element.children;
+
         // کاهش محدودیت برای DIV ها
         if (element.tagName === 'DIV') {
             // محدودیت نسبی بر اساس viewport برای جلوگیری از دستکاری باکس‌های بزرگ طرح‌بندی
             const vw = Math.max(1, window.innerWidth || 1200);
             const vh = Math.max(1, window.innerHeight || 800);
             if (element.offsetWidth > vw * 0.8 || element.offsetHeight > vh * 0.6) return false;
-            if (element.children.length > 8) return false; // افزایش از 5 به 8
         }
 
-        // کاهش محدودیت فرزندان
-        const children = element.children;
+        // یک بررسی مشترک برای همه تگ‌ها (DIV و غیره)
         if (children.length > 8) return false; // افزایش از 5 به 8
 
         const blockChildren = Array.from(children).filter(child =>
@@ -1673,7 +1669,7 @@ class RTLAIStudioManager {
 
                 let language = this.detectLanguage(text);
                 // مسیر سریع برای ورودی‌ها: اگر حتی یک حرف فارسی هست، ترجیح RTL
-                const hasPersian = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text || '');
+                const hasPersian = PERSIAN_REGEX.test(text || '');
                 const hasEnglish = /[A-Za-z]/.test(text || '');
                 if (hasPersian && (!hasEnglish || language === 'unknown')) {
                     language = 'persian';
@@ -1818,14 +1814,14 @@ class RTLAIStudioManager {
         // اگر بعد از پاکسازی هیچ کاراکتری نمانده، بررسی اولیه انجام دهیم
         if (cleanText.length < 1) {
             // بررسی وجود کاراکترهای فارسی در متن اصلی
-            const hasPersianInOriginal = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g.test(text);
+            const hasPersianInOriginal = PERSIAN_REGEX.test(text);
             const result = hasPersianInOriginal ? 'persian' : 'unknown';
             this.cacheLanguageResult(textHash, result);
             return result;
         }
 
         // محدوده‌های کامل‌تر برای کاراکترهای فارسی/عربی
-        const persianChars = cleanText.match(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g);
+        const persianChars = cleanText.match(PERSIAN_REGEX);
         const persianCount = persianChars ? persianChars.length : 0;
 
         const englishChars = cleanText.match(/[a-zA-Z]/g);
@@ -1834,7 +1830,7 @@ class RTLAIStudioManager {
         const totalChars = persianCount + englishCount;
         if (totalChars === 0) {
             // اگر هیچ کاراکتر شناخته‌شده‌ای نداشتیم، بررسی دوباره در متن اصلی
-            const hasPersianInOriginal = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g.test(text);
+            const hasPersianInOriginal = PERSIAN_REGEX.test(text);
             const result = hasPersianInOriginal ? 'persian' : 'unknown';
             this.cacheLanguageResult(textHash, result);
             return result;
@@ -1879,7 +1875,7 @@ class RTLAIStudioManager {
     // متد کمکی برای تشخیص سریع فارسی
     hasAnyPersianChar(text) {
         if (!text) return false;
-        return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
+        return PERSIAN_REGEX.test(text);
     }
 
     // ایجاد signature منحصر به فرد برای عنصر
@@ -2270,12 +2266,7 @@ class RTLAIStudioManager {
         if (this.scrollHandler) {
             window.removeEventListener('scroll', this.scrollHandler);
             // حذف از containers
-            const chatContainers = document.querySelectorAll([
-                '.conversation-container',
-                '.max-w-threadContentWidth',
-                '[data-testid="conversation-panel"]',
-                'main', '[role="main"]'
-            ].join(', '));
+            const chatContainers = document.querySelectorAll(CHAT_CONTAINER_SELECTORS);
             chatContainers.forEach(container => {
                 if (container) {
                     container.removeEventListener('scroll', this.scrollHandler);
