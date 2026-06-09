@@ -88,6 +88,8 @@ Class `PopupManagerInstantTrigger` — 340px wide popup UI.
 
 > **Note:** The `lib/` directory files exist but are **NOT loaded by the manifest**. The manifest only loads `content.js` (and `lib/print-helper.js` for PDF). All core logic lives directly in `content.js`. The `lib/` files are reference/source-of-truth only. See [Optimization Failure Chain](#-optimization-failure-chain-documented) below for why.
 
+> **The `lib/` files are outdated snapshots.** The actual running code is always in `content.js`. Do not modify `lib/` files expecting behavior changes — they are not loaded by the manifest (except `lib/print-helper.js`).
+
 ### `lib/detector.js`
 Pure functions — no DOM access. Exports:
 - `hasAnyPersianChar(text)`, `hashText(text)`, `simpleHash(str)`
@@ -220,7 +222,7 @@ The file uses Windows-style CRLF line endings. Any string matching or replacemen
 
 #### Rule 7: `isAbsolutelySafeForRTL` child limits are tuned, not arbitrary
 - **DIVs:** `children.length > 8` — catches layout containers
-- **Inline tags (P, SPAN, H1-H6, LI, TD, TH, BLOCKQUOTE):** currently uses the same `> 8` limit. Paragraphs with many `<code>` or `<strong>` children (common in ChatGPT output) can have 9+ children. The safe fix is to raise the limit for non-DIV tags to `> 50`.
+- **Inline tags (P, SPAN, H1-H6, LI, TD, TH, BLOCKQUOTE):** ⚠️ **KNOWN BUG** — uses the same `> 8` limit as DIVs, which rejects legitimate paragraphs with many `<code>` or `<strong>` children (common in ChatGPT output). **Fix:** raise the limit for non-DIV tags to `> 50`.
 - **`blockChildren > 4`** — catches paragraphs containing actual block-level elements
 
 #### Rule 8: `TEXT_TAGS_SELECTOR` is the single source of truth for tag lists
@@ -247,6 +249,16 @@ All querySelector calls should reference `TEXT_TAGS_SELECTOR` (defined at the to
 - **DIVs as layout containers:** Large DIVs (>80vw, >60vh, or >8 children) are skipped to avoid breaking page layout
 - **CRLF line endings:** The file uses `\r\n`. Any programmatic string manipulation must account for this.
 - **File size (125K+ chars):** The `str_replace` tool truncates files over 100K chars. Use `write_file` for large rewrites or apply changes in very small batches.
+
+---
+
+## Known Remaining Bugs
+
+These bugs exist in the current code (`8dee14b` / `fc4d556`) and should be fixed in a future optimization pass:
+
+1. **`isAbsolutelySafeForRTL` child limit too strict for inline tags** — A `<p>` with 9+ inline children (`<code>`, `<strong>`, `<a>`) gets rejected because the `children.length > 8` check applies to ALL tags, not just DIVs. ChatGPT paragraphs with many code/strong tags are affected. Fix: split the limit — `> 8` for DIVs, `> 50` for inline tags.
+
+2. **`immediateProcessAllContent` uses a hardcoded limited tag list** — Lines 337-347 hardcode only `p, span, h1-h4, li, td, th, blockquote, div` instead of using `TEXT_TAGS_SELECTOR`. Tags like `<a>`, `<button>`, `<label>`, `<figcaption>`, `<summary>`, `<em>`, `<strong>`, etc. are missed during the initial full-page scan.
 
 ---
 
