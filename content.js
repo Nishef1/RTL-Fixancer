@@ -5,6 +5,11 @@ if (window.RTLAIStudioManager) {
 // Comprehensive list of text-bearing HTML tags. Layout containers (header/footer/nav/aside/article/section/main)
 // are intentionally excluded — they are filtered out by isSafeElementForProcessing anyway.
 const TEXT_TAGS_SELECTOR = 'p, span, h1, h2, h3, h4, h5, h6, li, td, th, tr, blockquote, div, a, button, label, option, optgroup, legend, figcaption, caption, summary, details, cite, q, em, strong, b, i, u, mark, small, del, ins, sub, sup, time, abbr, dd, dt, address, output, thead, tbody, tfoot';
+const TEXT_TAGS_LIST = TEXT_TAGS_SELECTOR.split(',').map(t => t.trim());
+const TEXT_TAGS_NO_ATTR = ':not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])';
+function buildContainerSelector(containers) {
+    return containers.flatMap(c => TEXT_TAGS_LIST.map(t => c + ' ' + t + TEXT_TAGS_NO_ATTR)).join(', ');
+}
 
 class RTLAIStudioManager {
     constructor() {
@@ -601,11 +606,8 @@ class RTLAIStudioManager {
 
     processAIStudioSpecialElements() {
         const chatTargets = document.querySelectorAll(
-            '.conversation-container :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.chat-message :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.message-content :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.model-response :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            'ms-textarea textarea, textarea[aria-label*="prompt" i]'
+            buildContainerSelector(['.conversation-container', '.chat-message', '.message-content', '.model-response']) +
+            ', ms-textarea textarea, textarea[aria-label*="prompt" i]'
         );
 
         let processed = 0;
@@ -635,13 +637,8 @@ class RTLAIStudioManager {
     processPerplexitySpecialElements() {
         // کاهش محدودیت برای پردازش بیشتر
         const perplexityTargets = document.querySelectorAll(
-            '.prose :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.answer :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-testid="answer"] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-cplx-component="message-block-answer"] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.max-w-threadContentWidth :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.group\\/query :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            'textarea[aria-label*="Ask" i], textarea[aria-label*="type" i], [role="textbox"]'
+            buildContainerSelector(['.prose', '.answer', '[data-testid="answer"]', '[data-cplx-component="message-block-answer"]', '.max-w-threadContentWidth', '.group\\/query']) +
+            ', textarea[aria-label*="Ask" i], textarea[aria-label*="type" i], [role="textbox"]'
         );
 
         let processed = 0;
@@ -1341,9 +1338,7 @@ class RTLAIStudioManager {
     // پردازش عناصر ویژه ChatGPT
     processChatGPTSpecialElements() {
         const chatTargets = document.querySelectorAll(
-            '[data-testid="conversation-turn"]:not([data-ai-rtl-processed]) :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-message-author-role]:not([data-ai-rtl-processed]) :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.markdown:not([data-ai-rtl-processed]) :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])'
+            buildContainerSelector(['[data-testid="conversation-turn"]:not([data-ai-rtl-processed])', '[data-message-author-role]:not([data-ai-rtl-processed])', '.markdown:not([data-ai-rtl-processed])'])
         );
 
         chatTargets.forEach(element => {
