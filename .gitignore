@@ -36,5 +36,9 @@ desktop.ini
 *.tar
 *.tar.gz
 
+# Tools
+.opencode/
+graphify-out/
+
 # Misc
 *.bak
