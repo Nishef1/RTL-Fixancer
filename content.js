@@ -2499,7 +2499,27 @@ document.head.removeChild(style);
     }
 
     async exportPageAsPdf() {
-        // Simple print: the page already has RTL fixes applied via CSS injection and data attributes
+        // Scroll through the page to force lazy-loaded content to render, then print
+        const scroller = document.scrollingElement || document.documentElement;
+        const totalHeight = scroller.scrollHeight;
+        const viewportHeight = window.innerHeight;
+        const step = Math.max(viewportHeight - 100, 300);
+
+        // Scroll down in steps to trigger lazy-loading
+        for (let y = 0; y < totalHeight; y += step) {
+            scroller.scrollTop = y;
+            await new Promise(r => setTimeout(r, 150));
+        }
+
+        // Scroll to bottom to ensure everything is loaded
+        scroller.scrollTop = totalHeight;
+        await new Promise(r => setTimeout(r, 300));
+
+        // Scroll back to top for a clean print start
+        scroller.scrollTop = 0;
+        await new Promise(r => setTimeout(r, 200));
+
+        // Now print — all content should be in the DOM
         window.print();
     }
 
