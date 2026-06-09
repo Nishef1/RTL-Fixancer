@@ -7,6 +7,7 @@ if (window.RTLAIStudioManager) {
 const TEXT_TAGS_SELECTOR = 'p, span, h1, h2, h3, h4, h5, h6, li, td, th, tr, blockquote, div, a, button, label, option, optgroup, legend, figcaption, caption, summary, details, cite, q, em, strong, b, i, u, mark, small, del, ins, sub, sup, time, abbr, dd, dt, address, output, thead, tbody, tfoot';
 const TEXT_TAGS_LIST = TEXT_TAGS_SELECTOR.split(',').map(t => t.trim());
 const TEXT_TAGS_NO_ATTR = ':not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])';
+const PERSIAN_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/; // No /g flag — use with .test() only. For .match(), use /g inline.
 function buildContainerSelector(containers) {
     return containers.flatMap(c => TEXT_TAGS_LIST.map(t => c + ' ' + t + TEXT_TAGS_NO_ATTR)).join(', ');
 }
@@ -268,7 +269,7 @@ class RTLAIStudioManager {
             await this.loadSettings();
             
             if (this.config.isEnabled && this.isSiteEnabled()) {
-                console.log('RTL AI Studio: Starting extension for', this.currentDomain);
+        
                 
                 this.injectPersianFonts();
                 this.setupSmartObserver();
@@ -294,7 +295,7 @@ class RTLAIStudioManager {
                 setTimeout(() => this.immediateProcessAllContent(), 3000);
                 this.hasInitialized = true;
             } else {
-                console.log('RTL AI Studio: Site not enabled for', this.currentDomain);
+    
             }
         } catch (error) {
             console.error('RTL AI Studio: Start extension error:', error);
@@ -1338,32 +1339,10 @@ class RTLAIStudioManager {
         });
 
         // پردازش ویژه input های ChatGPT
-        this.processChatGPTInputs();
+        this.processInputs(document);
     }
 
     // پردازش ویژه input های ChatGPT
-    processChatGPTInputs() {
-        const chatInputs = document.querySelectorAll(
-            '[data-testid="chat-input"]:not([data-rtl-handled-ai-studio]), ' +
-            '[data-testid="prompt-textarea"]:not([data-rtl-handled-ai-studio]), ' +
-            '#prompt-textarea:not([data-rtl-handled-ai-studio]), ' +
-            '[placeholder*="Message"]:not([data-rtl-handled-ai-studio]), ' +
-            'div[contenteditable][role="textbox"]:not([data-rtl-handled-ai-studio]), ' +
-            'div[dir="auto"][contenteditable="true"]:not([data-rtl-handled-ai-studio])'
-        );
-
-        chatInputs.forEach(input => {
-            if (this.isSafeElementForProcessing(input)) {
-                this.setupSmartInputHandler(input);
-                
-                // اعمال فوری تنظیمات اگر متن فارسی دارد
-                const text = (input.innerText || input.textContent || input.value || '').trim();
-                if (text && this.hasAnyPersianChar(text)) {
-                    this.applyChatGPTInputFixes(input);
-                }
-            }
-        });
-    }
 
     // ناظر اختصاصی برای AI Studio جهت واکنش سریع به تغییرات متن/نود در ناحیه گفتگو
     setupAIStudioMutationObserver() {
@@ -1516,7 +1495,7 @@ class RTLAIStudioManager {
             // در Perplexity اگر در محتوای اصلی و دارای حروف فارسی باشد، فارسی را بر انگلیسی/نامشخص ترجیح بده
             if (this.isPerplexity) {
                 const inMainContent = element.closest('.prose, .answer, [data-testid="answer"]');
-                const hasPersian = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
+                const hasPersian = PERSIAN_REGEX.test(text);
                 const tagOk = ['P', 'SPAN', 'DIV', 'LI', 'H1', 'H2', 'H3'].includes(element.tagName);
                 if (inMainContent && hasPersian && tagOk) {
                     language = 'persian';
@@ -1639,7 +1618,7 @@ class RTLAIStudioManager {
 
                 let language = this.detectLanguage(text);
                 // مسیر سریع برای ورودی‌ها: اگر حتی یک حرف فارسی هست، ترجیح RTL
-                const hasPersian = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text || '');
+                const hasPersian = PERSIAN_REGEX.test(text || '');
                 const hasEnglish = /[A-Za-z]/.test(text || '');
                 if (hasPersian && (!hasEnglish || language === 'unknown')) {
                     language = 'persian';
@@ -1845,7 +1824,7 @@ class RTLAIStudioManager {
     // متد کمکی برای تشخیص سریع فارسی
     hasAnyPersianChar(text) {
         if (!text) return false;
-        return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
+        return PERSIAN_REGEX.test(text);
     }
 
     // ایجاد signature منحصر به فرد برای عنصر
@@ -2030,16 +2009,16 @@ class RTLAIStudioManager {
 
             this.config = { ...this.config, ...newConfig };
 
-            console.log('RTL AI Studio: Settings updated', newConfig);
+    
 
             if (newConfig.enabledSites && Array.isArray(newConfig.enabledSites) && JSON.stringify(prevSites) !== JSON.stringify(newConfig.enabledSites)) {
                 const wasEnabled = prevSites.includes(this.currentDomain);
                 const isEnabledNow = this.isSiteEnabled();
                 if (isEnabledNow && !wasEnabled) {
-                    console.log('RTL AI Studio: Site newly enabled, full reload');
+
                     await this.fullReload();
                 } else if (!isEnabledNow && wasEnabled) {
-                    console.log('RTL AI Studio: Site disabled, cleaning up');
+
                     this.cleanup();
                     return;
                 }
@@ -2054,17 +2033,17 @@ class RTLAIStudioManager {
 
             if (newConfig.hasOwnProperty('isEnabled')) {
                 if (newConfig.isEnabled && !oldEnabled) {
-                    console.log('RTL AI Studio: Extension enabled (full reload)');
+
                     await this.fullReload();
                 } else if (!newConfig.isEnabled && oldEnabled) {
-                    console.log('RTL AI Studio: Extension disabled');
+
                     this.cleanup();
                     return;
                 }
             }
 
             if (newConfig.detectionMode) {
-                console.log('RTL AI Studio: Detection mode changed, reprocessing');
+
                 await this.instantReprocessAllContent();
             }
         } catch (error) {
@@ -2105,7 +2084,7 @@ class RTLAIStudioManager {
 
     // پردازش فوری بدون delay
     async instantReprocessAllContent() {
-        console.log('RTL AI Studio: Instant reprocessing all content');
+
         
         // حذف همه attributes
         document.querySelectorAll('[data-ai-rtl-persian-text], [data-ai-rtl-english-text]').forEach(el => {
@@ -2140,7 +2119,7 @@ class RTLAIStudioManager {
     }
 
     async fullReload() {
-        console.log('RTL AI Studio: Full reload initiated');
+
         
         this.cleanup();
         this.removeAllRTLAttributes();
@@ -2157,7 +2136,7 @@ class RTLAIStudioManager {
             }
             if (this.isPerplexity) this._setupSiteMonitoring('Perplexity', 'processPerplexitySpecialElements', 800, 5000, () => {
                 if (this.shouldPerformPerplexityFullScan()) {
-                    console.log('RTL AI Studio: Performing Perplexity full scan due to long chat');
+
                     setTimeout(() => this.performFullPageScan(), 500);
                 }
             });
@@ -2819,7 +2798,7 @@ if (!window.rtlAIStudioInstantApply) {
             window.rtlManagerAIStudio = new RTLAIStudioManager();
             window.messageHandlerAIStudio = new MessageHandlerAIStudio(window.rtlManagerAIStudio);
 
-            console.log('✅ RTL AI Studio (Instant Apply) initialized successfully');
+
         } catch (error) {
             console.error('❌ RTL AI Studio initialization error:', error);
         }
