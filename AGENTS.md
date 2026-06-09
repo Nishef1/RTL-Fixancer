@@ -272,8 +272,7 @@ All originally documented known bugs have been fixed:
 ✅ **All originally documented bugs are now fixed.** No remaining known bugs.
 
 **Potential future improvements** (not bugs):
-- Cache `TEXT_TAGS_SELECTOR.split(',')` at module level via `TEXT_TAGS_LIST` constant ✅ Done
-- Extract `buildContainerSelector` as a class method instead of module-level function (minor cleanup)
+- Extract `buildContainerSelector` from module scope into a class static method (minor cleanup)
 - `processInputs` could use `TEXT_TAGS_SELECTOR`-based input selectors instead of hardcoded lists
 
 ---
