@@ -2507,7 +2507,7 @@ document.head.removeChild(style);
 
         // Scroll down in steps — re-measure scrollHeight each iteration
         // because lazy-loaded content (ChatGPT, Perplexity) increases the page height as you scroll
-        let prevHeight = 0;
+        let prevHeight = scroller.scrollHeight;
         for (let y = 0; y < scroller.scrollHeight; y += step) {
             scroller.scrollTop = y;
             await new Promise(r => setTimeout(r, 250));
