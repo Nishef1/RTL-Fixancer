@@ -320,18 +320,10 @@ class RTLAIStudioManager {
         try {
             
             
-            // استفاده از CSS selectors بهینه و cache شده
-            const selectors = [
-                'p:not([data-ai-rtl-processed])',
-                'span:not([data-ai-rtl-processed])', 
-                'h1:not([data-ai-rtl-processed])', 'h2:not([data-ai-rtl-processed])', 
-                'h3:not([data-ai-rtl-processed])', 'h4:not([data-ai-rtl-processed])',
-                'li:not([data-ai-rtl-processed])', 'td:not([data-ai-rtl-processed])', 
-                'th:not([data-ai-rtl-processed])', 'blockquote:not([data-ai-rtl-processed])',
-                'div:not([data-ai-rtl-processed])'
-            ];
+            // استفاده از TEXT_TAGS_SELECTOR برای پوشش کامل تمام برچسبهای متنی
+            const selectors = TEXT_TAGS_SELECTOR.split(',').map(t => t.trim() + ':not([data-ai-rtl-processed])').join(', ');
             
-            const allTextElements = document.querySelectorAll(selectors.join(', '));
+            const allTextElements = document.querySelectorAll(selectors);
             let processedCount = 0;
             
             // پردازش batch-based برای جلوگیری از blocking
