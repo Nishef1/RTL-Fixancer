@@ -1635,22 +1635,23 @@ class RTLAIStudioManager {
 
         const children = element.children;
 
-        // کاهش محدودیت برای DIV ها
         if (element.tagName === 'DIV') {
             // محدودیت نسبی بر اساس viewport برای جلوگیری از دستکاری باکس‌های بزرگ طرح‌بندی
             const vw = Math.max(1, window.innerWidth || 1200);
             const vh = Math.max(1, window.innerHeight || 800);
             if (element.offsetWidth > vw * 0.8 || element.offsetHeight > vh * 0.6) return false;
+            if (children.length > 8) return false; // DIV: strict
+        } else {
+            // Inline tags: allow many inline children. ChatGPT/Perplexity often produce
+            // paragraphs with 10-20 strong/code/a children. Only block children matter.
+            if (children.length > 50) return false; // sanity cap for inline tags
         }
-
-        // یک بررسی مشترک برای همه تگ‌ها (DIV و غیره)
-        if (children.length > 8) return false; // افزایش از 5 به 8
 
         const blockChildren = Array.from(children).filter(child =>
             ['DIV', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(child.tagName)
         );
 
-        if (blockChildren.length > 4) return false; // افزایش از 2 به 4
+        if (blockChildren.length > 4) return false;
 
         if (this.isLayoutContainer(element)) return false;
 
