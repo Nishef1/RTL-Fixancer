@@ -266,6 +266,8 @@ All originally documented known bugs have been fixed:
 | `960b16e` | `_recheckElements` limited selector lists replaced with `TEXT_TAGS_SELECTOR` and wildcards | Recheck covers all 44 tags, not just p/span/div |
 | `8dcebda` | `_recheckElements` attribute selectors inverted: `:not([data-ai-rtl-persian-text])` instead of `[data-ai-rtl-persian-text]` | Critical logic fix — recheck was a complete no-op for Perplexity and ChatGPT |
 | (latest) | `process*SpecialElements` wildcards narrowed to text-bearing tags via `buildContainerSelector` helper | Avoids matching `<script>`, `<img>`, `<br>`, `<svg>` in hot paths |
+| (latest) | Removed `processInputsOptimized` duplicate, replaced with `processInputs` | DRY fix — `processInputs` is a strict superset |
+| (latest) | Extracted `PERSIAN_REGEX` module-level constant, removed `processChatGPTInputs` duplicate, cleaned 12 verbose `console.log` calls | DRY + cleanup — 17 insertions, 38 deletions |
 
 ## Known Remaining Bugs
 
