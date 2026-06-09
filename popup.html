@@ -373,6 +373,15 @@
         .form-group { margin-bottom: 7px; }
         .form-group:last-child { margin-bottom: 0; }
 
+        /* Single-row layout for the تنظیمات section */
+        .form-row {
+            display: flex;
+            gap: 6px;
+            align-items: stretch;
+        }
+        .form-row .form-group { flex: 1; margin-bottom: 0; min-width: 0; }
+        .form-row .form-group label { font-size: 11.5px; margin-bottom: 2px; }
+
         .form-group label {
             display: block;
             font-size: 12.5px;
@@ -383,7 +392,7 @@
 
         .form-group select {
             width: 100%;
-            padding: 7px 12px;
+            padding: 7px 10px;
             border: 1.5px solid var(--border-color);
             border-radius: var(--radius-xs);
             font-size: 13px;
@@ -393,11 +402,12 @@
             appearance: none;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238e99ab' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
-            background-position: left 10px center;
-            padding-left: 28px;
+            background-position: left 8px center;
+            padding-left: 24px;
             cursor: pointer;
             transition: border-color var(--transition), box-shadow var(--transition);
         }
+        .form-row .form-group select { padding: 6px 8px; font-size: 12.5px; padding-left: 20px; background-position: left 6px center; }
         .form-group select:hover { border-color: #d1cdc8; }
         .form-group select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(193, 127, 89, 0.15); }
         .form-group select option { color: var(--text-primary); }
@@ -487,33 +497,32 @@
         <!-- Settings Section -->
         <div class="section" id="settingsPanel">
             <h3>🎨 تنظیمات</h3>
-
-            <div class="form-group">
-                <label for="fontSelect">فونت:</label>
-                <select id="fontSelect">
-                    <option value="vazir">وزیر</option>
-                    <option value="shabnam">شبنم</option>
-                    <option value="default">پیشفرض</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="fontSizeSelect">سایز:</label>
-                <select id="fontSizeSelect">
-                    <option value="default">پیشفرض</option>
-                    <option value="small">کوچک</option>
-                    <option value="medium">متوسط</option>
-                    <option value="large">بزرگ</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="detectionMode">حساسیت تشخیص:</label>
-                <select id="detectionMode">
-                    <option value="high">بالا</option>
-                    <option value="medium">متوسط</option>
-                    <option value="low">پایین</option>
-                </select>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="fontSelect">فونت</label>
+                    <select id="fontSelect">
+                        <option value="vazir">وزیر</option>
+                        <option value="shabnam">شبنم</option>
+                        <option value="default">پیشفرض</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="fontSizeSelect">سایز</label>
+                    <select id="fontSizeSelect">
+                        <option value="default">پیشفرض</option>
+                        <option value="small">کوچک</option>
+                        <option value="medium">متوسط</option>
+                        <option value="large">بزرگ</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="detectionMode">حساسیت</label>
+                    <select id="detectionMode">
+                        <option value="high">بالا</option>
+                        <option value="medium">متوسط</option>
+                        <option value="low">پایین</option>
+                    </select>
+                </div>
             </div>
         </div>
 

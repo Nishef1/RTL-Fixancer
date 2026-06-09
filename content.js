@@ -1,6 +1,11 @@
 if (window.RTLAIStudioManager) {
     console.log('RTL AI Studio: script already loaded, skipping redefinition');
 } else {
+
+// Comprehensive list of text-bearing HTML tags. Layout containers (header/footer/nav/aside/article/section/main)
+// are intentionally excluded — they are filtered out by isSafeElementForProcessing anyway.
+const TEXT_TAGS_SELECTOR = 'p, span, h1, h2, h3, h4, h5, h6, li, td, th, tr, blockquote, div, a, button, label, option, optgroup, legend, figcaption, caption, summary, details, cite, q, em, strong, b, i, u, mark, small, del, ins, sub, sup, time, abbr, dd, dt, address, output, thead, tbody, tfoot';
+
 class RTLAIStudioManager {
     constructor() {
         this.config = {
@@ -208,13 +213,10 @@ class RTLAIStudioManager {
 
     // بهینه‌سازی querySelector با استفاده از CSS selectors سریعتر
     getElementsForProcessing() {
-        const selectors = [
-            'p', 'span', 'h1', 'h2', 'h3', 'li', 'td', 'th',
-            '[role="text"]', '[data-testid*="message"]', '.message'
-        ];
-        
-        return Array.from(document.querySelectorAll(selectors.join(', ')))
-            .filter(el => !el.hasAttribute('data-ai-rtl-persian-text') && 
+        // Comprehensive tag list: includes a, button, label, option, figcaption, summary, em, strong, etc.
+        const selectors = TEXT_TAGS_SELECTOR + ', [role="text"], [data-testid*="message"], .message';
+        return Array.from(document.querySelectorAll(selectors))
+            .filter(el => !el.hasAttribute('data-ai-rtl-persian-text') &&
                          !el.hasAttribute('data-ai-rtl-english-text'));
     }
 
@@ -288,7 +290,10 @@ class RTLAIStudioManager {
                 await this.immediateProcessAllContent();
                 
                 this.startInputMonitoring();
-                if (this.isAIStudio) this._setupSiteMonitoring('AIStudio', 'processAIStudioSpecialElements', 500, 3000);
+                if (this.isAIStudio) {
+                    this._setupSiteMonitoring('AIStudio', 'processAIStudioSpecialElements', 500, 3000);
+                    this.setupAIStudioMutationObserver();
+                }
                 if (this.isPerplexity) this._setupSiteMonitoring('Perplexity', 'processPerplexitySpecialElements', 800, 5000, () => {
                     if (this.shouldPerformPerplexityFullScan()) {
                                 setTimeout(() => this.performFullPageScan(), 500);
@@ -895,8 +900,8 @@ class RTLAIStudioManager {
         // برای چت‌های طولانی، margin بیشتری در نظر بگیر
         const margin = expandedRange ? 1000 : 400; // افزایش margin
         
-        // انتخاب عناصر متنی در نزدیکی viewport
-        const candidates = document.querySelectorAll('p, span, h1, h2, h3, h4, h5, h6, li, td, th, div');
+        // Comprehensive text-bearing tags (a, button, label, figcaption, etc. included)
+        const candidates = document.querySelectorAll(TEXT_TAGS_SELECTOR);
         
         candidates.forEach(element => {
             try {
@@ -955,14 +960,10 @@ class RTLAIStudioManager {
         if (!this.intersectionObserver) return;
 
         try {
+            // Comprehensive tag list (excludes div which has a separate block-child guard)
+            const _tagsObs = TEXT_TAGS_SELECTOR;
             const unprocessedElements = document.querySelectorAll(
-                'p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'h1:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'h2:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'h3:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'li:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'div:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])'
+                _tagsObs.split(',').map(t => t.trim() + ':not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])').join(', ')
             );
 
             // محدود کردن تعداد عناصر observe شده
@@ -993,17 +994,10 @@ class RTLAIStudioManager {
         try {
             
             
-            // یافتن همه عناصر متنی بدون محدودیت viewport
+            // Comprehensive tag list — picks up a, button, label, figcaption, summary, em, strong, etc.
+            const _tagsFull = TEXT_TAGS_SELECTOR;
             const allElements = document.querySelectorAll(
-                'p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'h1:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'h2:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'h3:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'li:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'td:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'th:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                'div:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])'
+                _tagsFull.split(',').map(t => t.trim() + ':not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])').join(', ')
             );
 
             let processedCount = 0;
@@ -1055,8 +1049,8 @@ class RTLAIStudioManager {
                         if (!this.stableElements.has(node)) {
                             elementsToProcess.add(node);
                             
-                            // شامل همه فرزندان
-                            const children = node.querySelectorAll('p, span, h1, h2, h3, h4, h5, h6, li, td, th, div');
+                            // شامل همه فرزندان — comprehensive tag list
+                            const children = node.querySelectorAll(TEXT_TAGS_SELECTOR);
                             children.forEach(child => {
                                 if (this.isSafeElementForProcessing(child) && !this.stableElements.has(child)) {
                                     elementsToProcess.add(child);
@@ -1184,14 +1178,14 @@ class RTLAIStudioManager {
     _recheckElements(siteName) {
         const configs = {
             'AIStudio': {
-                selectors: 'p, span, div, h1, h2, h3, h4, h5, h6, li',
+                selectors: TEXT_TAGS_SELECTOR,
                 maxRecheck: 50,
                 logName: 'Google AI Studio'
             },
             'Perplexity': {
                 selectors: '.prose p, .prose span, .prose div, .answer p, .answer span, .answer div, ' +
                            '[data-testid="answer"] p, [data-testid="answer"] span, [data-testid="answer"] div, ' +
-                           'p, span, div, h1, h2, h3, h4, h5, h6, li',
+                           TEXT_TAGS_SELECTOR,
                 maxRecheck: 60,
                 logName: 'Perplexity'
             },
@@ -1252,10 +1246,9 @@ class RTLAIStudioManager {
         if (!this.isSpecialChatSite()) return;
 
         try {
-            // یافتن همه عناصر متنی در viewport
+            // Comprehensive list + chat-specific class hints
             const allTextElements = document.querySelectorAll(
-                'p, span, div[class*="text"], div[class*="content"], div[class*="message"], ' +
-                'h1, h2, h3, h4, h5, h6, li, td, th'
+                TEXT_TAGS_SELECTOR + ', div[class*="text"], div[class*="content"], div[class*="message"]'
             );
 
             let recheckCount = 0;
@@ -2192,7 +2185,10 @@ class RTLAIStudioManager {
             await this.immediateProcessAllContent();
             
             this.startInputMonitoring();
-            if (this.isAIStudio) this._setupSiteMonitoring('AIStudio', 'processAIStudioSpecialElements', 500, 3000);
+            if (this.isAIStudio) {
+                this._setupSiteMonitoring('AIStudio', 'processAIStudioSpecialElements', 500, 3000);
+                this.setupAIStudioMutationObserver();
+            }
             if (this.isPerplexity) this._setupSiteMonitoring('Perplexity', 'processPerplexitySpecialElements', 800, 5000, () => {
                 if (this.shouldPerformPerplexityFullScan()) {
                     console.log('RTL AI Studio: Performing Perplexity full scan due to long chat');
@@ -2306,6 +2302,60 @@ class RTLAIStudioManager {
     removeFontStyles() {
         const fontStyles = document.querySelectorAll('#ai-rtl-fonts, #ai-rtl-fallback-fonts');
         fontStyles.forEach(style => style.remove());
+    }
+
+    // Attach event listeners using AbortController so they can be detached in bulk when
+    // the input is removed from the DOM. Returns the controller for later detachment.
+    _attachAbortController(input, events, handler) {
+        try {
+            const controller = new AbortController();
+            const signal = controller.signal;
+            for (const evt of events) {
+                input.addEventListener(evt, handler, { signal, passive: evt === 'input' || evt === 'keyup' || evt === 'keydown' });
+            }
+            return controller;
+        } catch (e) {
+            // Fallback: plain addEventListener (older browsers, no AbortController support)
+            for (const evt of events) {
+                input.addEventListener(evt, handler);
+            }
+            return null;
+        }
+    }
+
+    _detachAbortController(input, controller) {
+        try {
+            if (controller && typeof controller.abort === 'function') {
+                controller.abort();
+            }
+        } catch (_) {}
+    }
+
+    // Attach event listeners using AbortController so they can be detached in bulk when
+    // the input is removed from the DOM. Returns the controller for later detachment.
+    _attachAbortController(input, events, handler) {
+        try {
+            const controller = new AbortController();
+            const signal = controller.signal;
+            for (const evt of events) {
+                input.addEventListener(evt, handler, { signal, passive: evt === 'input' || evt === 'keyup' || evt === 'keydown' });
+            }
+            return controller;
+        } catch (e) {
+            // Fallback: plain addEventListener (older browsers, no AbortController support)
+            for (const evt of events) {
+                input.addEventListener(evt, handler);
+            }
+            return null;
+        }
+    }
+
+    _detachAbortController(input, controller) {
+        try {
+            if (controller && typeof controller.abort === 'function') {
+                controller.abort();
+            }
+        } catch (_) {}
     }
 
     getStats() {
