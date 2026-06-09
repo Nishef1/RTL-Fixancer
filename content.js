@@ -5,20 +5,6 @@ if (window.RTLAIStudioManager) {
 // Comprehensive list of text-bearing HTML tags. Layout containers (header/footer/nav/aside/article/section/main)
 // are intentionally excluded — they are filtered out by isSafeElementForProcessing anyway.
 const TEXT_TAGS_SELECTOR = 'p, span, h1, h2, h3, h4, h5, h6, li, td, th, tr, blockquote, div, a, button, label, option, optgroup, legend, figcaption, caption, summary, details, cite, q, em, strong, b, i, u, mark, small, del, ins, sub, sup, time, abbr, dd, dt, address, output, thead, tbody, tfoot';
-const TEXT_TAGS_NOTDIV = 'p, span, h1, h2, h3, h4, h5, h6, li, td, th, tr, blockquote, a, button, label, option, optgroup, legend, figcaption, caption, summary, details, cite, q, em, strong, b, i, u, mark, small, del, ins, sub, sup, time, abbr, dd, dt, address, output, thead, tbody, tfoot';
-
-// Centralised regex so it is never duplicated in detectLanguage / processElement / setupSmartInputHandler.
-const PERSIAN_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
-
-// Chat-container selectors used by scroll handler and cleanup.
-const CHAT_CONTAINER_SELECTORS = '.conversation-container, .max-w-threadContentWidth, [data-testid="conversation-panel"], main, [role="main"]';
-
-// Precomputed :not(...) variants — built once at module load instead of every call site.
-const NOT_PERSIAN_ENGLISH = ':not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])';
-function buildNegSelector(tagList) {
-    return tagList.split(',').map(t => t.trim() + NOT_PERSIAN_ENGLISH).join(', ');
-}
-const TEXT_TAGS_NEG_SELECTOR = buildNegSelector(TEXT_TAGS_SELECTOR);
 
 class RTLAIStudioManager {
     constructor() {
@@ -175,7 +161,7 @@ class RTLAIStudioManager {
                     this.forceReprocessUnprocessedContent();
                 }
             }
-        }, 3000);
+        }, 2000);
     }
 
     // پردازش اجباری محتوای پردازش نشده - بهینه‌سازی شده با caching
@@ -225,20 +211,6 @@ class RTLAIStudioManager {
         }
     }
 
-    // Cache isSafeElementForProcessing results so the same element is not re-validated every tick.
-    isSafeCache = new WeakMap();
-
-    isSafeElementForProcessingCached(element) {
-        if (!element || !element.tagName) return false;
-        if (this.processedElements.has(element)) return false;
-        if (this.stableElements.has(element)) return false;
-        const cached = this.isSafeCache.get(element);
-        if (cached !== undefined) return cached;
-        const result = this.isSafeElementForProcessing(element);
-        this.isSafeCache.set(element, result);
-        return result;
-    }
-
     // بهینه‌سازی querySelector با استفاده از CSS selectors سریعتر
     getElementsForProcessing() {
         // Comprehensive tag list: includes a, button, label, option, figcaption, summary, em, strong, etc.
@@ -267,15 +239,11 @@ class RTLAIStudioManager {
             '.prose', '.markdown', '.chat-message', '.message-content',
             '[data-testid="message-content"]', '.assistant-message', '.user-message'
         ];
-
+        
         const elements = document.querySelectorAll(chatSelectors.join(', '));
-        const unprocessed = [];
-        for (let i = 0; i < elements.length; i++) {
-            const el = elements[i];
-            if (el.hasAttribute('data-ai-rtl-persian-text') || el.hasAttribute('data-ai-rtl-english-text')) continue;
-            if (this.stableElements.has(el)) continue;
-            if (this.isSafeElementForProcessingCached(el)) unprocessed.push(el);
-        }
+        const unprocessed = Array.from(elements).filter(el => 
+            this.isSafeElementForProcessing(el) && !this.isElementProcessed(el)
+        );
 
         // پردازش در batch‌های کوچک
         const batchSize = 20;
@@ -693,8 +661,6 @@ class RTLAIStudioManager {
 
         let processed = 0;
         perplexityTargets.forEach(element => {
-            if (element.hasAttribute('data-ai-rtl-persian-text') || element.hasAttribute('data-ai-rtl-english-text')) return;
-            if (this.stableElements.has(element)) return;
             if (element.tagName === 'TEXTAREA' || element.getAttribute('role') === 'textbox' || element.matches('[contenteditable="true"]')) {
                 const leaf = this.findEditableLeaf(element);
                 if (leaf && !this.stableElements.has(leaf)) {
@@ -760,13 +726,11 @@ class RTLAIStudioManager {
                     if (this.isScrollContainer(mutation.target) && !this.isSpecialChatSite()) return false;
                     return true;
                 }
-                // characterData is no longer observed (see setupSmartObserver), but keep this branch
-                // as a safety net in case it is re-enabled.
+                // بهبود: تغییر متن موجود را در همه سایت‌های چت پردازش کن
                 if (this.isSpecialChatSite() && mutation.type === 'characterData') {
                     const targetNode = mutation.target;
                     const el = targetNode.nodeType === Node.TEXT_NODE ? targetNode.parentElement : targetNode;
                     if (!el) return false;
-                    // Inline selectors — left here because they are special-chat-only and different from CHAT_CONTAINER_SELECTORS.
                     const chatSelectors = [
                         // AI Studio
                         '.conversation-container', '.chat-message', '.model-response', '.message-content',
@@ -793,12 +757,10 @@ class RTLAIStudioManager {
             }, 50); // کاهش delay برای پاسخ سریعتر
         });
 
-        // characterData is removed from the main observer to avoid the cost of firing on every keystroke.
-        // The AI Studio dedicated observer (setupAIStudioMutationObserver) handles text changes for that site.
         this.observer.observe(document.body, {
             childList: true,
             subtree: true,
-            characterData: false
+            characterData: this.isSpecialChatSite()
         });
 
         // اضافه کردن scroll event listener برای محتوای lazy-loaded
@@ -845,7 +807,12 @@ class RTLAIStudioManager {
         
         // برای سایت‌های چت، containers خاص را هم monitor کن
         if (this.isSpecialChatSite()) {
-            const chatContainers = document.querySelectorAll(CHAT_CONTAINER_SELECTORS);
+            const chatContainers = document.querySelectorAll([
+                '.conversation-container', // AI Studio
+                '.max-w-threadContentWidth', // Perplexity
+                '[data-testid="conversation-panel"]', // ChatGPT
+                'main', '[role="main"]' // عمومی
+            ].join(', '));
 
             chatContainers.forEach(container => {
                 if (container && this.isScrollContainer(container)) {
@@ -993,7 +960,11 @@ class RTLAIStudioManager {
         if (!this.intersectionObserver) return;
 
         try {
-            const unprocessedElements = document.querySelectorAll(TEXT_TAGS_NEG_SELECTOR);
+            // Comprehensive tag list (excludes div which has a separate block-child guard)
+            const _tagsObs = TEXT_TAGS_SELECTOR;
+            const unprocessedElements = document.querySelectorAll(
+                _tagsObs.split(',').map(t => t.trim() + ':not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])').join(', ')
+            );
 
             // محدود کردن تعداد عناصر observe شده
             let observeCount = 0;
@@ -1023,7 +994,11 @@ class RTLAIStudioManager {
         try {
             
             
-            const allElements = document.querySelectorAll(TEXT_TAGS_NEG_SELECTOR);
+            // Comprehensive tag list — picks up a, button, label, figcaption, summary, em, strong, etc.
+            const _tagsFull = TEXT_TAGS_SELECTOR;
+            const allElements = document.querySelectorAll(
+                _tagsFull.split(',').map(t => t.trim() + ':not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])').join(', ')
+            );
 
             let processedCount = 0;
             const batchSize = 50; // پردازش در دسته‌های کوچک
@@ -1563,11 +1538,7 @@ class RTLAIStudioManager {
     }
 
     processElement(element) {
-        if (!this.config.isEnabled) return;
-        // Early exit: already tagged
-        if (element.hasAttribute('data-ai-rtl-persian-text') || element.hasAttribute('data-ai-rtl-english-text')) return;
-        if (this.stableElements.has(element)) return;
-        if (!this.isSafeElementForProcessing(element)) return;
+        if (!this.config.isEnabled || !this.isSafeElementForProcessing(element)) return;
 
         try {
 
@@ -1584,7 +1555,7 @@ class RTLAIStudioManager {
             // در Perplexity اگر در محتوای اصلی و دارای حروف فارسی باشد، فارسی را بر انگلیسی/نامشخص ترجیح بده
             if (this.isPerplexity) {
                 const inMainContent = element.closest('.prose, .answer, [data-testid="answer"]');
-                const hasPersian = PERSIAN_REGEX.test(text);
+                const hasPersian = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
                 const tagOk = ['P', 'SPAN', 'DIV', 'LI', 'H1', 'H2', 'H3'].includes(element.tagName);
                 if (inMainContent && hasPersian && tagOk) {
                     language = 'persian';
@@ -1647,25 +1618,24 @@ class RTLAIStudioManager {
         const safeTags = ['P', 'SPAN', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TD', 'TH', 'BLOCKQUOTE', 'DIV'];
         if (!safeTags.includes(element.tagName)) return false;
 
-        const children = element.children;
-
+        // کاهش محدودیت برای DIV ها
         if (element.tagName === 'DIV') {
             // محدودیت نسبی بر اساس viewport برای جلوگیری از دستکاری باکس‌های بزرگ طرح‌بندی
             const vw = Math.max(1, window.innerWidth || 1200);
             const vh = Math.max(1, window.innerHeight || 800);
             if (element.offsetWidth > vw * 0.8 || element.offsetHeight > vh * 0.6) return false;
-            if (children.length > 8) return false; // DIV: strict
-        } else {
-            // Inline tags: allow many inline children. ChatGPT/Perplexity often produce
-            // paragraphs with 10-20 strong/code/a children. Only block children matter.
-            if (children.length > 50) return false; // sanity cap for inline tags
+            if (element.children.length > 8) return false; // افزایش از 5 به 8
         }
+
+        // کاهش محدودیت فرزندان
+        const children = element.children;
+        if (children.length > 8) return false; // افزایش از 5 به 8
 
         const blockChildren = Array.from(children).filter(child =>
             ['DIV', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(child.tagName)
         );
 
-        if (blockChildren.length > 4) return false;
+        if (blockChildren.length > 4) return false; // افزایش از 2 به 4
 
         if (this.isLayoutContainer(element)) return false;
 
@@ -1703,7 +1673,7 @@ class RTLAIStudioManager {
 
                 let language = this.detectLanguage(text);
                 // مسیر سریع برای ورودی‌ها: اگر حتی یک حرف فارسی هست، ترجیح RTL
-                const hasPersian = PERSIAN_REGEX.test(text || '');
+                const hasPersian = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text || '');
                 const hasEnglish = /[A-Za-z]/.test(text || '');
                 if (hasPersian && (!hasEnglish || language === 'unknown')) {
                     language = 'persian';
@@ -1848,14 +1818,14 @@ class RTLAIStudioManager {
         // اگر بعد از پاکسازی هیچ کاراکتری نمانده، بررسی اولیه انجام دهیم
         if (cleanText.length < 1) {
             // بررسی وجود کاراکترهای فارسی در متن اصلی
-            const hasPersianInOriginal = PERSIAN_REGEX.test(text);
+            const hasPersianInOriginal = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g.test(text);
             const result = hasPersianInOriginal ? 'persian' : 'unknown';
             this.cacheLanguageResult(textHash, result);
             return result;
         }
 
         // محدوده‌های کامل‌تر برای کاراکترهای فارسی/عربی
-        const persianChars = cleanText.match(PERSIAN_REGEX);
+        const persianChars = cleanText.match(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g);
         const persianCount = persianChars ? persianChars.length : 0;
 
         const englishChars = cleanText.match(/[a-zA-Z]/g);
@@ -1864,7 +1834,7 @@ class RTLAIStudioManager {
         const totalChars = persianCount + englishCount;
         if (totalChars === 0) {
             // اگر هیچ کاراکتر شناخته‌شده‌ای نداشتیم، بررسی دوباره در متن اصلی
-            const hasPersianInOriginal = PERSIAN_REGEX.test(text);
+            const hasPersianInOriginal = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g.test(text);
             const result = hasPersianInOriginal ? 'persian' : 'unknown';
             this.cacheLanguageResult(textHash, result);
             return result;
@@ -1909,7 +1879,7 @@ class RTLAIStudioManager {
     // متد کمکی برای تشخیص سریع فارسی
     hasAnyPersianChar(text) {
         if (!text) return false;
-        return PERSIAN_REGEX.test(text);
+        return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
     }
 
     // ایجاد signature منحصر به فرد برای عنصر
@@ -2300,7 +2270,12 @@ class RTLAIStudioManager {
         if (this.scrollHandler) {
             window.removeEventListener('scroll', this.scrollHandler);
             // حذف از containers
-            const chatContainers = document.querySelectorAll(CHAT_CONTAINER_SELECTORS);
+            const chatContainers = document.querySelectorAll([
+                '.conversation-container',
+                '.max-w-threadContentWidth',
+                '[data-testid="conversation-panel"]',
+                'main', '[role="main"]'
+            ].join(', '));
             chatContainers.forEach(container => {
                 if (container) {
                     container.removeEventListener('scroll', this.scrollHandler);
