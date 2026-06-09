@@ -506,24 +506,12 @@ class RTLAIStudioManager {
         ];
 
         const perplexitySpecialElements = [
-            '.prose p[data-ai-rtl-persian-text="true"]',
-            '.prose span[data-ai-rtl-persian-text="true"]',
-            '.prose h1[data-ai-rtl-persian-text="true"]',
-            '.prose h2[data-ai-rtl-persian-text="true"]',
-            '.prose h3[data-ai-rtl-persian-text="true"]',
-            '[data-testid="answer"] p[data-ai-rtl-persian-text="true"]',
-            '[data-testid="answer"] span[data-ai-rtl-persian-text="true"]',
-            '[data-testid="answer"] h1[data-ai-rtl-persian-text="true"]',
-            '[data-testid="answer"] h2[data-ai-rtl-persian-text="true"]',
-            '[data-testid="answer"] h3[data-ai-rtl-persian-text="true"]',
-            '.answer p[data-ai-rtl-persian-text="true"]',
-            '.answer span[data-ai-rtl-persian-text="true"]',
-            '[data-cplx-component="message-block-answer"] p[data-ai-rtl-persian-text="true"]',
-            '[data-cplx-component="message-block-answer"] span[data-ai-rtl-persian-text="true"]',
-            '.max-w-threadContentWidth p[data-ai-rtl-persian-text="true"]',
-            '.max-w-threadContentWidth span[data-ai-rtl-persian-text="true"]',
-            '.group\\/query p[data-ai-rtl-persian-text="true"]',
-            '.group\\/query span[data-ai-rtl-persian-text="true"]'
+            '.prose [data-ai-rtl-persian-text="true"]',
+            '[data-testid="answer"] [data-ai-rtl-persian-text="true"]',
+            '.answer [data-ai-rtl-persian-text="true"]',
+            '[data-cplx-component="message-block-answer"] [data-ai-rtl-persian-text="true"]',
+            '.max-w-threadContentWidth [data-ai-rtl-persian-text="true"]',
+            '.group\\/query [data-ai-rtl-persian-text="true"]'
         ];
 
         return `
