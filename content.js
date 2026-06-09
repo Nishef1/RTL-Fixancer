@@ -1627,9 +1627,14 @@ class RTLAIStudioManager {
             if (element.children.length > 8) return false; // افزایش از 5 به 8
         }
 
-        // کاهش محدودیت فرزندان
+        // محدودیت فرزندان - DIVها سختگیرانه، بقیه برچسبها آزادتر
         const children = element.children;
-        if (children.length > 8) return false; // افزایش از 5 به 8
+        if (element.tagName === 'DIV') {
+            if (children.length > 8) return false;
+        } else {
+            // برچسبهای inline مثل P میتوانند فرزندان زیادی داشته باشند (code, strong, a, ...)
+            if (children.length > 50) return false;
+        }
 
         const blockChildren = Array.from(children).filter(child =>
             ['DIV', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(child.tagName)
