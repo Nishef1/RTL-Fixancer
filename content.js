@@ -2504,24 +2504,6 @@ document.head.removeChild(style);
     }
 
 
-    async openImagesInPrintWindow(slices) {
-        // ساخت HTML چاپ با تصاویر متوالی؛ مشابه Just-One-Page: حالت چندصفحه A4
-        const injectedStyle = document.getElementById('ai-rtl-fonts');
-        const fontOuter = injectedStyle ? injectedStyle.outerHTML : '';
-        const css = '';
-        const items = slices.map(s => `<div class="page"><img src="${s.img}" /></div>`).join('');
-        const html = `<!doctype html><html><head><meta charset="utf-8">${fontOuter}<style>${css}</style></head><body>${items}</body></html>`;
-        if (!window.__rtlPrintWin || window.__rtlPrintWin.closed) {
-            window.__rtlPrintWin = window.open('about:blank', '_blank', 'noopener,noreferrer');
-        }
-        const win = window.__rtlPrintWin;
-        if (!win) throw new Error('Popup blocked');
-        win.document.open('text/html', 'replace');
-        win.document.write(html);
-        win.document.close();
-        await new Promise(resolve => win.addEventListener('load', resolve, { once: true }));
-        try { win.focus(); win.print(); } catch (_) {}
-    }
 
     escapeHtml(unsafe) {
         try {

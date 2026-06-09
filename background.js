@@ -238,20 +238,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    if (message.action === 'captureVisible') {
-        try {
-            chrome.tabs.captureVisibleTab(sender.tab.windowId, { format: 'png' }, (dataUrl) => {
-                if (chrome.runtime.lastError) {
-                    sendResponse({ success: false, error: chrome.runtime.lastError.message });
-                } else {
-                    sendResponse({ success: true, dataUrl });
-                }
-            });
-        } catch (e) {
-            sendResponse({ success: false, error: e.message });
-        }
-        return true;
-    }
+    
     return true;
 });
 
