@@ -258,24 +258,6 @@ class RTLAIStudioManager {
     }
 
     // راه‌اندازی Intersection Observer برای عناصر viewport
-    setupIntersectionObserver() {
-        if (this.intersectionObserver) {
-            this.intersectionObserver.disconnect();
-        }
-
-        this.intersectionObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting && this.isSafeElementForProcessing(entry.target)) {
-                    const text = this.getCleanText(entry.target);
-                    if (text && this.hasAnyPersianChar(text) && !this.isElementProcessed(entry.target)) {
-                        this.processElement(entry.target);
-                        this.stableElements.add(entry.target);
-                    }
-                }
-            });
-        }, { threshold: 0.1 });
-    }
-
     async startExtension() {
         try {
             await this.loadSettings();
@@ -619,18 +601,10 @@ class RTLAIStudioManager {
 
     processAIStudioSpecialElements() {
         const chatTargets = document.querySelectorAll(
-            '.conversation-container p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.conversation-container span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.conversation-container div:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.chat-message p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.chat-message span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.chat-message div:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.message-content p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.message-content span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.message-content div:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.model-response p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.model-response span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.model-response div:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+            '.conversation-container :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+            '.chat-message :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+            '.message-content :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+            '.model-response :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
             'ms-textarea textarea, textarea[aria-label*="prompt" i]'
         );
 
@@ -661,18 +635,12 @@ class RTLAIStudioManager {
     processPerplexitySpecialElements() {
         // کاهش محدودیت برای پردازش بیشتر
         const perplexityTargets = document.querySelectorAll(
-            '.prose p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.prose span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.answer p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.answer span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-testid="answer"] p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-testid="answer"] span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-cplx-component="message-block-answer"] p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-cplx-component="message-block-answer"] span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.max-w-threadContentWidth p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.max-w-threadContentWidth span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.group\\/query p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.group\\/query span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+            '.prose :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+            '.answer :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+            '[data-testid="answer"] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+            '[data-cplx-component="message-block-answer"] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+            '.max-w-threadContentWidth :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+            '.group\\/query :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
             'textarea[aria-label*="Ask" i], textarea[aria-label*="type" i], [role="textbox"]'
         );
 
@@ -1373,15 +1341,9 @@ class RTLAIStudioManager {
     // پردازش عناصر ویژه ChatGPT
     processChatGPTSpecialElements() {
         const chatTargets = document.querySelectorAll(
-            '[data-testid="conversation-turn"]:not([data-ai-rtl-processed]) p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-testid="conversation-turn"]:not([data-ai-rtl-processed]) span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-testid="conversation-turn"]:not([data-ai-rtl-processed]) div:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-message-author-role]:not([data-ai-rtl-processed]) p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-message-author-role]:not([data-ai-rtl-processed]) span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '[data-message-author-role]:not([data-ai-rtl-processed]) div:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.markdown:not([data-ai-rtl-processed]) p:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.markdown:not([data-ai-rtl-processed]) span:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-            '.markdown:not([data-ai-rtl-processed]) div:not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])'
+            '[data-testid="conversation-turn"]:not([data-ai-rtl-processed]) :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+            '[data-message-author-role]:not([data-ai-rtl-processed]) :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+            '.markdown:not([data-ai-rtl-processed]) :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])'
         );
 
         chatTargets.forEach(element => {
