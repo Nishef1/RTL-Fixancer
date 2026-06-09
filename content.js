@@ -5,6 +5,20 @@ if (window.RTLAIStudioManager) {
 // Comprehensive list of text-bearing HTML tags. Layout containers (header/footer/nav/aside/article/section/main)
 // are intentionally excluded — they are filtered out by isSafeElementForProcessing anyway.
 const TEXT_TAGS_SELECTOR = 'p, span, h1, h2, h3, h4, h5, h6, li, td, th, tr, blockquote, div, a, button, label, option, optgroup, legend, figcaption, caption, summary, details, cite, q, em, strong, b, i, u, mark, small, del, ins, sub, sup, time, abbr, dd, dt, address, output, thead, tbody, tfoot';
+const TEXT_TAGS_NOTDIV = 'p, span, h1, h2, h3, h4, h5, h6, li, td, th, tr, blockquote, a, button, label, option, optgroup, legend, figcaption, caption, summary, details, cite, q, em, strong, b, i, u, mark, small, del, ins, sub, sup, time, abbr, dd, dt, address, output, thead, tbody, tfoot';
+
+// Centralised regex so it is never duplicated in detectLanguage / processElement / setupSmartInputHandler.
+const PERSIAN_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+
+// Chat-container selectors used by scroll handler and cleanup.
+const CHAT_CONTAINER_SELECTORS = '.conversation-container, .max-w-threadContentWidth, [data-testid="conversation-panel"], main, [role="main"]';
+
+// Precomputed :not(...) variants — built once at module load instead of every call site.
+const NOT_PERSIAN_ENGLISH = ':not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])';
+function buildNegSelector(tagList) {
+    return tagList.split(',').map(t => t.trim() + NOT_PERSIAN_ENGLISH).join(', ');
+}
+const TEXT_TAGS_NEG_SELECTOR = buildNegSelector(TEXT_TAGS_SELECTOR);
 
 class RTLAIStudioManager {
     constructor() {
