@@ -4,7 +4,7 @@
 
 Chrome Extension (Manifest V3) for intelligent Persian/Farsi text RTL detection, direction fixing, and font enhancement across the web. Optimized for AI chat UIs (Perplexity, Google AI Studio, ChatGPT).
 
-- **Version:** 3.3
+- **Version:** 3.4 (post bug-fix pass)
 - **Manifest:** MV3, content script at `document_start`, runs in `all_frames`
 - **License:** CC BY-NC-ND 4.0
 - **Repo:** https://github.com/Nishef1/RTL-Fixancer
@@ -222,7 +222,7 @@ The file uses Windows-style CRLF line endings. Any string matching or replacemen
 
 #### Rule 7: `isAbsolutelySafeForRTL` child limits are tuned, not arbitrary
 - **DIVs:** `children.length > 8` — catches layout containers
-- **Inline tags (P, SPAN, H1-H6, LI, TD, TH, BLOCKQUOTE):** ⚠️ **KNOWN BUG** — uses the same `> 8` limit as DIVs, which rejects legitimate paragraphs with many `<code>` or `<strong>` children (common in ChatGPT output). **Fix:** raise the limit for non-DIV tags to `> 50`.
+- **Inline tags (P, SPAN, H1-H6, LI, TD, TH, BLOCKQUOTE):** `children.length > 50` — relaxed limit since inline tags can have many `<code>`, `<strong>`, `<a>` children in chat output. ✅ Fixed in `fe0b794`.
 - **`blockChildren > 4`** — catches paragraphs containing actual block-level elements
 
 #### Rule 8: `TEXT_TAGS_SELECTOR` is the single source of truth for tag lists
@@ -252,13 +252,29 @@ All querySelector calls should reference `TEXT_TAGS_SELECTOR` (defined at the to
 
 ---
 
+## Recent Fixes (this session)
+
+All originally documented known bugs have been fixed:
+
+| Commit | Fix | Impact |
+|--------|-----|--------|
+| `fe0b794` | `isAbsolutelySafeForRTL` child limit split: DIVs keep `> 8`, inline tags get `> 50` | Paragraphs with many `<code>`/`<strong>` children now get RTL'd |
+| `a799bac` | `immediateProcessAllContent` uses `TEXT_TAGS_SELECTOR` instead of hardcoded 11 tags | Initial full-page scan now covers all 44 text-bearing tags |
+| `5e4218f` | `generateOptimizedCSS` generates CSS rules for all 44 tags | Elements like `<a>`, `<button>`, `<em>`, `<strong>` now get RTL styling |
+| `15ce3ca` | Perplexity CSS selectors simplified to wildcard `[data-ai-rtl-persian-text]` inside containers | All tagged elements in Perplexity answers get container-scoped CSS rules |
+| `81db81c` | Removed duplicate `setupIntersectionObserver`; wildcard selectors in all `process*SpecialElements` | Dead code removed; all 44 tags covered in site-specific processing |
+| `960b16e` | `_recheckElements` limited selector lists replaced with `TEXT_TAGS_SELECTOR` and wildcards | Recheck covers all 44 tags, not just p/span/div |
+| `8dcebda` | `_recheckElements` attribute selectors inverted: `:not([data-ai-rtl-persian-text])` instead of `[data-ai-rtl-persian-text]` | Critical logic fix — recheck was a complete no-op for Perplexity and ChatGPT |
+| (latest) | `process*SpecialElements` wildcards narrowed to text-bearing tags via `buildContainerSelector` helper | Avoids matching `<script>`, `<img>`, `<br>`, `<svg>` in hot paths |
+
 ## Known Remaining Bugs
 
-These bugs exist in the current code (`8dee14b` / `fc4d556`) and should be fixed in a future optimization pass:
+✅ **All originally documented bugs are now fixed.** No remaining known bugs.
 
-1. **`isAbsolutelySafeForRTL` child limit too strict for inline tags** — A `<p>` with 9+ inline children (`<code>`, `<strong>`, `<a>`) gets rejected because the `children.length > 8` check applies to ALL tags, not just DIVs. ChatGPT paragraphs with many code/strong tags are affected. Fix: split the limit — `> 8` for DIVs, `> 50` for inline tags.
-
-2. **`immediateProcessAllContent` uses a hardcoded limited tag list** — Lines 337-347 hardcode only `p, span, h1-h4, li, td, th, blockquote, div` instead of using `TEXT_TAGS_SELECTOR`. Tags like `<a>`, `<button>`, `<label>`, `<figcaption>`, `<summary>`, `<em>`, `<strong>`, etc. are missed during the initial full-page scan.
+**Potential future improvements** (not bugs):
+- Cache `TEXT_TAGS_SELECTOR.split(',')` at module level via `TEXT_TAGS_LIST` constant ✅ Done
+- Extract `buildContainerSelector` as a class method instead of module-level function (minor cleanup)
+- `processInputs` could use `TEXT_TAGS_SELECTOR`-based input selectors instead of hardcoded lists
 
 ---
 
