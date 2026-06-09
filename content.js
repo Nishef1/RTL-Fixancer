@@ -1763,7 +1763,7 @@ class RTLAIStudioManager {
         // اگر بعد از پاکسازی هیچ کاراکتری نمانده، بررسی اولیه انجام دهیم
         if (cleanText.length < 1) {
             // بررسی وجود کاراکترهای فارسی در متن اصلی
-            const hasPersianInOriginal = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g.test(text);
+            const hasPersianInOriginal = PERSIAN_REGEX.test(text);
             const result = hasPersianInOriginal ? 'persian' : 'unknown';
             this.cacheLanguageResult(textHash, result);
             return result;
@@ -1779,7 +1779,7 @@ class RTLAIStudioManager {
         const totalChars = persianCount + englishCount;
         if (totalChars === 0) {
             // اگر هیچ کاراکتر شناخته‌شده‌ای نداشتیم، بررسی دوباره در متن اصلی
-            const hasPersianInOriginal = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g.test(text);
+            const hasPersianInOriginal = PERSIAN_REGEX.test(text);
             const result = hasPersianInOriginal ? 'persian' : 'unknown';
             this.cacheLanguageResult(textHash, result);
             return result;
