@@ -1174,11 +1174,11 @@ class RTLAIStudioManager {
         try {
             if (!element) return null;
             if (element.nodeType !== 1) return null;
-            if (element.matches('textarea, input[type="text"], input[type="search"], [contenteditable="true"], [role="textbox"]')) return element;
-            const inner = element.querySelector('textarea, input[type="text"], input[type="search"], [contenteditable="true"], [role="textbox"]');
+            if (element.matches && element.matches('textarea, input[type="text"], input[type="search"], [contenteditable="true"], [role="textbox"]')) return element;
+            const inner = element.querySelector && element.querySelector('textarea, input[type="text"], input[type="search"], [contenteditable="true"], [role="textbox"]');
             if (inner) return inner;
-            return element;
-        } catch (_) { return element; }
+            return null;
+        } catch (_) { return null; }
     }
 
     // ============================================================
@@ -1770,11 +1770,22 @@ class RTLAIStudioManager {
             }
         };
 
-        // فرکانس بالاتر event handling
+        // فرکانس بالاتر event handling با AbortController برای جلوگیری از memory leak هنگام حذف input
         const events = ['input', 'keyup', 'keydown', 'paste', 'focus', 'blur', 'change', 'compositionstart', 'compositionupdate', 'compositionend'];
-        events.forEach(event => {
-            input.addEventListener(event, event === 'paste' ? () => setTimeout(handler, 10) : handler, { passive: true });
-        });
+        const controller = this._attachAbortController(input, events, handler);
+
+        // اگر input از DOM حذف شد، listenerها را پاک کن
+        try {
+            const removalObserver = new MutationObserver(() => {
+                if (!input.isConnected) {
+                    this._detachAbortController(input, controller);
+                    removalObserver.disconnect();
+                }
+            });
+            if (input.parentNode) {
+                removalObserver.observe(input.parentNode, { childList: true });
+            }
+        } catch (_) {}
 
         handler();
         this.stats.inputCount++;
@@ -1949,13 +1960,14 @@ class RTLAIStudioManager {
         // اگر signature در کش وجود دارد
         if (this.processedTextCache.has(signature)) {
             const cachedData = this.processedTextCache.get(signature);
-            
+
             // اگر عنصر attribute ندارد اما در کش هست، دوباره اعمال کن
-            if (!element.hasAttribute('data-ai-rtl-persian-text') && 
+            if (!element.hasAttribute('data-ai-rtl-persian-text') &&
                 !element.hasAttribute('data-ai-rtl-english-text')) {
                 this.reapplyProcessedState(element, cachedData);
-                return true;
             }
+            // Always mark as stable after a cache hit to prevent reprocessing
+            this.stableElements.add(element);
             return true;
         }
         return false;
@@ -2398,18 +2410,21 @@ class RTLAIStudioManager {
 
     // بررسی دوره‌ای برای زمانی که تب جدیدی باز می‌شود و site-enabled از قبل ست شده اما تب هنوز شروع نشده
     startEnableSitePolling() {
-        try {
-            this.setTimer('enableSitePoll', async () => {
-                try {
-                    if (this.observer || this.hasInitialized) return; // قبلاً شروع شده
-                    await this.loadSettings();
-                    if (this.config.isEnabled && this.isSiteEnabled()) {
-                        console.log('RTL AI Studio: Detected enabled site in this tab, initializing...');
-                        await this.startExtension();
-                    }
-                } catch (_) {}
-            }, 1500);
-        } catch (_) {}
+        // Re-load settings shortly after startup in case the tab was opened before sync storage was available,
+        // and ensure extension is started if the current site is enabled.
+        const pollId = setInterval(() => {
+            try {
+                if (this.hasInitialized) {
+                    clearInterval(pollId);
+                    return;
+                }
+                if (this.config && this.config.isEnabled && this.isSiteEnabled()) {
+                    this.startExtension();
+                }
+            } catch (_) {}
+        }, 1500);
+        // Stop polling after 30 seconds regardless
+        setTimeout(() => clearInterval(pollId), 30000);
     }
 }
 

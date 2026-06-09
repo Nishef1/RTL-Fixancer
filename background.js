@@ -79,6 +79,7 @@ const iconUpdateQueue = {};
 function debounceUpdateIcon(tabId, url) {
     clearTimeout(iconUpdateQueue[tabId]);
     iconUpdateQueue[tabId] = setTimeout(() => {
+        delete iconUpdateQueue[tabId];
         updateIconForTab(tabId, url);
     }, 150);
 }
@@ -265,11 +266,12 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     }
 });
 
-// --- Keep Service Worker Alive ---
-chrome.runtime.onConnect.addListener((port) => {
-    port.onDisconnect.addListener(() => {
-        console.log('Port disconnected');
-    });
+// --- Clean up pending icon updates when tabs are closed ---
+chrome.tabs.onRemoved && chrome.tabs.onRemoved.addListener((tabId) => {
+    if (iconUpdateQueue[tabId]) {
+        clearTimeout(iconUpdateQueue[tabId]);
+        delete iconUpdateQueue[tabId];
+    }
 });
 
 chrome.tabs.onActivated && chrome.tabs.onActivated.addListener(async (activeInfo) => {

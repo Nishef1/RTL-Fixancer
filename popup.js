@@ -243,7 +243,8 @@ class PopupManagerInstantTrigger {
     safeSetElementProperty(elementId, property, value) {
         try {
             const element = this.elements[elementId];
-            if (element && element !== element.constructor.prototype && property in element) {
+            // element is a real DOM node (or fallback div), not just the prototype object
+            if (element && element.nodeType === 1 && property in element) {
                 element[property] = value;
                 return true;
             }
