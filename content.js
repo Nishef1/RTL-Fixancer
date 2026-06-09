@@ -2507,18 +2507,22 @@ document.head.removeChild(style);
         scrollables.push({ el: docScroller, saved: docScroller.scrollTop });
 
         // Find nested scrollable containers (overflow: auto/scroll with scrollable content)
-        document.querySelectorAll('*').forEach(el => {
+        // Only check likely scrollable container tags (avoids scanning every element on the page)
+        document.querySelectorAll('div, section, main, article, aside, nav, ul, ol, table').forEach(el => {
             if (el === docScroller || el === document.body || el === document.documentElement) return;
             try {
                 const style = getComputedStyle(el);
-                const isScrollable = (style.overflowY === 'scroll' || style.overflowY === 'auto') && el.scrollHeight > el.clientHeight + 50;
+                const isScrollable = (style.overflowY === 'scroll' || style.overflowY === 'auto') && el.scrollHeight > el.clientHeight;
                 if (isScrollable && el.clientHeight > 200) {
-                    scrollables.push({ el: el, saved: el.scrollTop });
+                    // Skip if a parent container is already in the list (avoid redundant scrolling)
+                    if (!scrollables.some(s => s.el.contains(el))) {
+                        scrollables.push({ el: el, saved: el.scrollTop });
+                    }
                 }
             } catch (_) {}
         });
 
-        console.log('[RTL PDF] Found', scrollables.length, 'scrollable container(s)');
+
 
         // Scroll each container to load all lazy content
         for (const { el } of scrollables) {
