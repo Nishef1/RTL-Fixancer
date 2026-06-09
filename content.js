@@ -1168,17 +1168,17 @@ class RTLAIStudioManager {
                 logName: 'Google AI Studio'
             },
             'Perplexity': {
-                selectors: '.prose [data-ai-rtl-persian-text], .answer [data-ai-rtl-persian-text], ' +
-                           '[data-testid="answer"] [data-ai-rtl-persian-text], [data-cplx-component="message-block-answer"] [data-ai-rtl-persian-text], ' +
-                           '.max-w-threadContentWidth [data-ai-rtl-persian-text], .group\\/query [data-ai-rtl-persian-text], ' +
+                selectors: '.prose :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), .answer :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+                           '[data-testid="answer"] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), [data-cplx-component="message-block-answer"] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+                           '.max-w-threadContentWidth :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), .group\\/query :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
                            TEXT_TAGS_SELECTOR,
                 maxRecheck: 60,
                 logName: 'Perplexity'
             },
             'ChatGPT': {
-                selectors: '[data-testid="conversation-turn"] [data-ai-rtl-persian-text], ' +
-                           '[data-message-author-role] [data-ai-rtl-persian-text], ' +
-                           '.markdown [data-ai-rtl-persian-text], ' +
+                selectors: '[data-testid="conversation-turn"] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+                           '[data-message-author-role] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+                           '.markdown :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
                            TEXT_TAGS_SELECTOR,
                 maxRecheck: 70,
                 logName: 'ChatGPT'
