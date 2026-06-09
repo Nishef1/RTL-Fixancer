@@ -2499,38 +2499,60 @@ document.head.removeChild(style);
     }
 
     async exportPageAsPdf() {
-        // Save scroll position, scroll to load all lazy content, print, then restore
-        const scroller = document.scrollingElement || document.documentElement;
-        const savedScrollTop = scroller.scrollTop;
-        const viewportHeight = window.innerHeight;
-        const step = Math.max(viewportHeight - 100, 300);
+        // Find ALL scrollable containers (document body + nested scrollable divs like Gemini's chat area)
+        const scrollables = [];
+        const docScroller = document.scrollingElement || document.documentElement;
 
-        // Scroll down in steps — re-measure scrollHeight each iteration
-        // because lazy-loaded content (ChatGPT, Perplexity) increases the page height as you scroll
-        let prevHeight = scroller.scrollHeight;
-        for (let y = 0; y < scroller.scrollHeight; y += step) {
-            scroller.scrollTop = y;
-            await new Promise(r => setTimeout(r, 250));
-            // If new content loaded, allow extra time for rendering
-            if (scroller.scrollHeight !== prevHeight) {
-                prevHeight = scroller.scrollHeight;
-                await new Promise(r => setTimeout(r, 150));
+        // Always scroll the document body
+        scrollables.push({ el: docScroller, saved: docScroller.scrollTop });
+
+        // Find nested scrollable containers (overflow: auto/scroll with scrollable content)
+        document.querySelectorAll('*').forEach(el => {
+            if (el === docScroller || el === document.body || el === document.documentElement) return;
+            try {
+                const style = getComputedStyle(el);
+                const isScrollable = (style.overflowY === 'scroll' || style.overflowY === 'auto') && el.scrollHeight > el.clientHeight + 50;
+                if (isScrollable && el.clientHeight > 200) {
+                    scrollables.push({ el: el, saved: el.scrollTop });
+                }
+            } catch (_) {}
+        });
+
+        console.log('[RTL PDF] Found', scrollables.length, 'scrollable container(s)');
+
+        // Scroll each container to load all lazy content
+        for (const { el } of scrollables) {
+            const viewportHeight = el.clientHeight || window.innerHeight;
+            const step = Math.max(viewportHeight - 100, 300);
+            let prevHeight = el.scrollHeight;
+
+            for (let y = 0; y < el.scrollHeight; y += step) {
+                el.scrollTop = y;
+                await new Promise(r => setTimeout(r, 250));
+                if (el.scrollHeight !== prevHeight) {
+                    prevHeight = el.scrollHeight;
+                    await new Promise(r => setTimeout(r, 150));
+                }
             }
+
+            // Final scroll to bottom
+            el.scrollTop = el.scrollHeight;
+            await new Promise(r => setTimeout(r, 400));
         }
 
-        // Final scroll to absolute bottom to catch any remaining lazy content
-        scroller.scrollTop = scroller.scrollHeight;
-        await new Promise(r => setTimeout(r, 400));
-
-        // Scroll back to top for a clean print start
-        scroller.scrollTop = 0;
+        // Scroll all containers back to top for a clean print
+        for (const { el } of scrollables) {
+            el.scrollTop = 0;
+        }
         await new Promise(r => setTimeout(r, 200));
 
         // Print — all content should now be in the DOM
         window.print();
 
-        // Restore original scroll position
-        scroller.scrollTop = savedScrollTop;
+        // Restore original scroll positions
+        for (const { el, saved } of scrollables) {
+            el.scrollTop = saved;
+        }
     }
 
 
