@@ -336,7 +336,7 @@ class RTLAIStudioManager {
             }
 
             // پردازش inputs در batch جداگانه
-            this.processInputsOptimized(document);
+            this.processInputs(document);
 
             // پردازش ویژه سایت - فقط اگر لازم باشد
             if (this.isAIStudio && this.shouldProcessSpecialElements()) {
@@ -361,19 +361,6 @@ class RTLAIStudioManager {
     }
 
     // پردازش بهینه inputs
-    processInputsOptimized(root = document) {
-        const inputs = root.querySelectorAll('input[type="text"], input[type="search"], textarea, [contenteditable="true"]');
-        const batchSize = 50;
-        
-        for (let i = 0; i < inputs.length; i += batchSize) {
-            const batch = Array.from(inputs).slice(i, i + batchSize);
-            batch.forEach(input => this.setupSmartInputHandler(input));
-            
-            if (i + batchSize < inputs.length) {
-                setTimeout(() => {}, 0); // allow browser to breathe
-            }
-        }
-    }
 
     async loadSettings() {
         return new Promise(resolve => {
