@@ -2499,28 +2499,38 @@ document.head.removeChild(style);
     }
 
     async exportPageAsPdf() {
-        // Scroll through the page to force lazy-loaded content to render, then print
+        // Save scroll position, scroll to load all lazy content, print, then restore
         const scroller = document.scrollingElement || document.documentElement;
-        const totalHeight = scroller.scrollHeight;
+        const savedScrollTop = scroller.scrollTop;
         const viewportHeight = window.innerHeight;
         const step = Math.max(viewportHeight - 100, 300);
 
-        // Scroll down in steps to trigger lazy-loading
-        for (let y = 0; y < totalHeight; y += step) {
+        // Scroll down in steps — re-measure scrollHeight each iteration
+        // because lazy-loaded content (ChatGPT, Perplexity) increases the page height as you scroll
+        let prevHeight = 0;
+        for (let y = 0; y < scroller.scrollHeight; y += step) {
             scroller.scrollTop = y;
-            await new Promise(r => setTimeout(r, 150));
+            await new Promise(r => setTimeout(r, 250));
+            // If new content loaded, allow extra time for rendering
+            if (scroller.scrollHeight !== prevHeight) {
+                prevHeight = scroller.scrollHeight;
+                await new Promise(r => setTimeout(r, 150));
+            }
         }
 
-        // Scroll to bottom to ensure everything is loaded
-        scroller.scrollTop = totalHeight;
-        await new Promise(r => setTimeout(r, 300));
+        // Final scroll to absolute bottom to catch any remaining lazy content
+        scroller.scrollTop = scroller.scrollHeight;
+        await new Promise(r => setTimeout(r, 400));
 
         // Scroll back to top for a clean print start
         scroller.scrollTop = 0;
         await new Promise(r => setTimeout(r, 200));
 
-        // Now print — all content should be in the DOM
+        // Print — all content should now be in the DOM
         window.print();
+
+        // Restore original scroll position
+        scroller.scrollTop = savedScrollTop;
     }
 
 
