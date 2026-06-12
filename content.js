@@ -7,6 +7,7 @@ if (window.RTLAIStudioManager) {
 const TEXT_TAGS_SELECTOR = 'p, span, h1, h2, h3, h4, h5, h6, li, td, th, tr, blockquote, div, a, button, label, option, optgroup, legend, figcaption, caption, summary, details, cite, q, em, strong, b, i, u, mark, small, del, ins, sub, sup, time, abbr, dd, dt, address, output, thead, tbody, tfoot';
 const TEXT_TAGS_LIST = TEXT_TAGS_SELECTOR.split(',').map(t => t.trim());
 const TEXT_TAGS_NO_ATTR = ':not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])';
+const TEXT_TAGS_NO_PROCESSED = TEXT_TAGS_LIST.map(t => t + ':not([data-ai-rtl-processed])').join(', ');
 const PERSIAN_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/; // No /g flag — use with .test() only. For .match(), use /g inline.
 function buildContainerSelector(containers) {
     return containers.flatMap(c => TEXT_TAGS_LIST.map(t => c + ' ' + t + TEXT_TAGS_NO_ATTR)).join(', ');
@@ -309,7 +310,7 @@ class RTLAIStudioManager {
             
             
             // استفاده از TEXT_TAGS_SELECTOR برای پوشش کامل تمام برچسبهای متنی
-            const selectors = TEXT_TAGS_SELECTOR.split(',').map(t => t.trim() + ':not([data-ai-rtl-processed])').join(', ');
+            const selectors = TEXT_TAGS_NO_PROCESSED;
             
             const allTextElements = document.querySelectorAll(selectors);
             let processedCount = 0;
@@ -345,6 +346,9 @@ class RTLAIStudioManager {
             }
             if (this.isPerplexity && this.shouldProcessSpecialElements()) {
                 this.processPerplexitySpecialElements();
+            }
+            if (this.isChatGPT && this.shouldProcessSpecialElements()) {
+                this.processChatGPTSpecialElements();
             }
 
             this.stats.immediateProcessing++;
@@ -431,15 +435,6 @@ class RTLAIStudioManager {
             '[role="textbox"][data-ai-rtl-persian-input="true"]'
         ];
 
-        const perplexitySpecialElements = [
-            '.prose [data-ai-rtl-persian-text="true"]',
-            '[data-testid="answer"] [data-ai-rtl-persian-text="true"]',
-            '.answer [data-ai-rtl-persian-text="true"]',
-            '[data-cplx-component="message-block-answer"] [data-ai-rtl-persian-text="true"]',
-            '.max-w-threadContentWidth [data-ai-rtl-persian-text="true"]',
-            '.group\\/query [data-ai-rtl-persian-text="true"]'
-        ];
-
         const blockElements = [
             'p[data-ai-rtl-persian-text="true"]',
             'div[data-ai-rtl-persian-text="true"]',
@@ -518,10 +513,8 @@ class RTLAIStudioManager {
                 unicode-bidi: isolate !important;
             }
 
-            /* Persian Inline Elements - font only, inherit direction from parent block */
+            /* Persian Inline Elements - inherit direction from parent block */
             ${inlineElements.join(',\n            ')} {
-                ${fontFamilyCSS}
-                ${fontSizeCSS}
                 unicode-bidi: inherit !important;
             }
 
@@ -558,15 +551,6 @@ class RTLAIStudioManager {
                 text-align: left !important;
                 font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
                 unicode-bidi: normal !important;
-            }
-            
-            /* Perplexity Special Elements */
-            ${perplexitySpecialElements.join(',\n            ')} {
-                direction: rtl !important;
-                text-align: right !important;
-                ${fontFamilyCSS}
-                ${fontSizeCSS}
-                unicode-bidi: isolate !important;
             }
         `;
     }
@@ -1521,19 +1505,6 @@ class RTLAIStudioManager {
                     this.processedElements.set(element, { processed: true, language: 'persian' });
                     this.cacheProcessedElement(element, text, 'persian'); // ذخیره در کش
                     this.stats.processedCount++;
-                    if (this.isPerplexity) {
-                        try {
-                            const fontFamily = this.getFontFamily();
-                            const fontSize = this.getFontSize();
-                            if (!this.isInlineElement(element)) {
-                                element.style.setProperty('direction', 'rtl', 'important');
-                                element.style.setProperty('text-align', 'right', 'important');
-                                element.style.setProperty('unicode-bidi', 'isolate', 'important');
-                            }
-                            if (fontFamily) element.style.setProperty('font-family', fontFamily, 'important');
-                            if (fontSize) element.style.setProperty('font-size', fontSize, 'important');
-                        } catch (_) {}
-                    }
                 }
             } else {
                 element.removeAttribute('data-ai-rtl-persian-text');
@@ -1583,7 +1554,7 @@ class RTLAIStudioManager {
 
     getCleanText(element) {
         try {
-            if ('innerText' in element) return element.innerText.trim();
+            if ('textContent' in element) return element.textContent.trim();
 
             let text = '';
             for (let node of element.childNodes) {
@@ -1829,21 +1800,10 @@ class RTLAIStudioManager {
         const tagName = element.tagName || '';
         const className = element.className || '';
         const textLength = text.length;
-        const textHash = this.simpleHash(text.substring(0, 50)); // اول 50 کاراکتر
+        const textHash = this.hashText(text.substring(0, 50)); // اول 50 کاراکتر
         const parentTag = element.parentElement?.tagName || '';
         
         return `${tagName}_${className}_${parentTag}_${textLength}_${textHash}`;
-    }
-
-    // hash ساده برای متن
-    simpleHash(str) {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            const char = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // تبدیل به 32-bit integer
-        }
-        return Math.abs(hash).toString(36);
     }
 
     // بررسی اینکه آیا عنصر قبلاً پردازش شده یا نه
