@@ -38,6 +38,7 @@ class RTLAIStudioManager {
         this.processingQueue = new Set();
         this.lastFullScanTime = 0; // زمان آخرین اسکن کامل
         this.scrollHandler = null; // scroll handler reference
+        this.scrollController = new AbortController(); // AbortController for scroll listeners
         this.intersectionObserver = null; // intersection observer reference
         this.intersectionObserverTimer = null; // intersection observer timer
         this.processedTextCache = new Map(); // کش متون پردازش شده با signature
@@ -222,7 +223,7 @@ class RTLAIStudioManager {
     getElementsForProcessing() {
         // Comprehensive tag list: includes a, button, label, option, figcaption, summary, em, strong, etc.
         const selectors = TEXT_TAGS_SELECTOR + ', [role="text"], [data-testid*="message"], .message';
-        return Array.from(document.querySelectorAll(selectors))
+        return [...document.querySelectorAll(selectors)]
             .filter(el => !el.hasAttribute('data-ai-rtl-persian-text') &&
                          !el.hasAttribute('data-ai-rtl-english-text'));
     }
@@ -248,7 +249,7 @@ class RTLAIStudioManager {
         ];
         
         const elements = document.querySelectorAll(chatSelectors.join(', '));
-        const unprocessed = Array.from(elements).filter(el => 
+        const unprocessed = [...elements].filter(el => 
             this.isSafeElementForProcessing(el) && !this.isElementProcessed(el)
         );
 
@@ -291,9 +292,9 @@ class RTLAIStudioManager {
                 if (this.isChatGPT) this._setupSiteMonitoring('ChatGPT', 'processChatGPTSpecialElements', 1000, 8000);
                 
                 // پردازش اضافی برای اطمینان
-                setTimeout(() => this.immediateProcessAllContent(), 500);
-                setTimeout(() => this.immediateProcessAllContent(), 1500);
-                setTimeout(() => this.immediateProcessAllContent(), 3000);
+                requestIdleCallback(() => this.immediateProcessAllContent(), { timeout: 1000 });
+                requestIdleCallback(() => this.immediateProcessAllContent(), { timeout: 2000 });
+                requestIdleCallback(() => this.immediateProcessAllContent(), { timeout: 4000 });
                 this.hasInitialized = true;
             } else {
     
@@ -317,7 +318,7 @@ class RTLAIStudioManager {
             
             // پردازش batch-based برای جلوگیری از blocking
             const batchSize = 100;
-            const elementsArray = Array.from(allTextElements);
+            const elementsArray = [...allTextElements];
             for (let i = 0; i < elementsArray.length; i += batchSize) {
                 const batch = elementsArray.slice(i, i + batchSize);
                 batch.forEach(element => {
@@ -742,25 +743,32 @@ class RTLAIStudioManager {
         if (this.scrollHandler) return; // قبلاً تنظیم شده
 
         let scrollTimeout;
+        let idleCallbackId = null;
         this.scrollHandler = () => {
             clearTimeout(scrollTimeout);
             scrollTimeout = setTimeout(() => {
                 if (this.config.isEnabled && this.isSiteEnabled()) {
-                    // پردازش محتوای جدید پس از اسکرول
-                    this.processNewScrollContent();
-                    
-                    // برای سایت‌های چت: اسکن فوری اضافی
-                    if (this.isSpecialChatSite()) {
-                        setTimeout(() => {
-                            this.aggressiveAIStudioRecheck();
-                        }, 500);
-                    }
+                    // استفاده از requestIdleCallback برای پردازش non-urgent
+                    if (idleCallbackId) cancelIdleCallback(idleCallbackId);
+                    idleCallbackId = requestIdleCallback((deadline) => {
+                        if (deadline.timeRemaining() > 0 || deadline.didTimeout) {
+                            // پردازش محتوای جدید پس از اسکرول
+                            this.processNewScrollContent();
+                            
+                            // برای سایت‌های چت: اسکن فوری اضافی
+                            if (this.isSpecialChatSite()) {
+                                requestIdleCallback(() => {
+                                    this.aggressiveAIStudioRecheck();
+                                }, { timeout: 1000 });
+                            }
+                        }
+                    }, { timeout: 500 });
                 }
             }, 200);
         };
 
         // اضافه کردن listener به window و containers اصلی
-        window.addEventListener('scroll', this.scrollHandler, { passive: true });
+        window.addEventListener('scroll', this.scrollHandler, { passive: true, signal: this.scrollController.signal });
         
         // برای سایت‌های چت، containers خاص را هم monitor کن
         if (this.isSpecialChatSite()) {
@@ -773,7 +781,7 @@ class RTLAIStudioManager {
 
             chatContainers.forEach(container => {
                 if (container && this.isScrollContainer(container)) {
-                    container.addEventListener('scroll', this.scrollHandler, { passive: true });
+                    container.addEventListener('scroll', this.scrollHandler, { passive: true, signal: this.scrollController.signal });
                 }
             });
         }
@@ -1541,7 +1549,7 @@ class RTLAIStudioManager {
             if (children.length > 50) return false;
         }
 
-        const blockChildren = Array.from(children).filter(child =>
+        const blockChildren = [...children].filter(child =>
             ['DIV', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(child.tagName)
         );
 
@@ -1968,7 +1976,7 @@ class RTLAIStudioManager {
 
     
 
-            if (newConfig.enabledSites && Array.isArray(newConfig.enabledSites) && JSON.stringify(prevSites) !== JSON.stringify(newConfig.enabledSites)) {
+            if (newConfig.enabledSites && Array.isArray(newConfig.enabledSites) && JSON.stringify(structuredClone(prevSites)) !== JSON.stringify(structuredClone(newConfig.enabledSites))) {
                 const wasEnabled = prevSites.includes(this.currentDomain);
                 const isEnabledNow = this.isSiteEnabled();
                 if (isEnabledNow && !wasEnabled) {
@@ -2093,15 +2101,15 @@ class RTLAIStudioManager {
             if (this.isPerplexity) this._setupSiteMonitoring('Perplexity', 'processPerplexitySpecialElements', 800, 5000, () => {
                 if (this.shouldPerformPerplexityFullScan()) {
 
-                    setTimeout(() => this.performFullPageScan(), 500);
+                    requestIdleCallback(() => this.performFullPageScan(), { timeout: 1000 });
                 }
             });
             if (this.isChatGPT) this._setupSiteMonitoring('ChatGPT', 'processChatGPTSpecialElements', 1000, 8000);
             
             // پردازش چندباره برای اطمینان
-            setTimeout(() => this.immediateProcessAllContent(), 200);
-            setTimeout(() => this.immediateProcessAllContent(), 1000);
-            setTimeout(() => this.immediateProcessAllContent(), 2000);
+            requestIdleCallback(() => this.immediateProcessAllContent(), { timeout: 500 });
+            requestIdleCallback(() => this.immediateProcessAllContent(), { timeout: 1500 });
+            requestIdleCallback(() => this.immediateProcessAllContent(), { timeout: 3000 });
         }
     }
 
@@ -2168,23 +2176,12 @@ class RTLAIStudioManager {
             this.languageCache.clear();
         }
 
-        // حذف scroll handlers
-        if (this.scrollHandler) {
-            window.removeEventListener('scroll', this.scrollHandler);
-            // حذف از containers
-            const chatContainers = document.querySelectorAll([
-                '.conversation-container',
-                '.max-w-threadContentWidth',
-                '[data-testid="conversation-panel"]',
-                'main', '[role="main"]'
-            ].join(', '));
-            chatContainers.forEach(container => {
-                if (container) {
-                    container.removeEventListener('scroll', this.scrollHandler);
-                }
-            });
-            this.scrollHandler = null;
+        // حذف scroll handlers via AbortController
+        if (this.scrollController) {
+            this.scrollController.abort();
+            this.scrollController = new AbortController();
         }
+        this.scrollHandler = null;
 
         this.removeAllRTLAttributes();
         this.removeFontStyles();
