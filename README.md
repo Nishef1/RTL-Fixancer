@@ -6,16 +6,18 @@ Improve and right-align Persian (Farsi) text across the web. RTL Fixancer is a C
 - **Smart detection**: Per-element language detection (Persian vs English) with adjustable sensitivity.
 - **Automatic direction**: Applies `direction` and alignment (RTL/LTR) with `unicode-bidi: isolate` for mixed text.
 - **Beautiful Persian fonts**: Ships WOFF2 versions of Vazir/Shabnam for fast loading; applied only to detected Persian content.
-- **AI chat optimized**: Site-specific handling for Perplexity, Google AI Studio, and ChatGPT to avoid breaking layout while fixing text.
+- **AI chat optimized**: Site-specific handling for Perplexity, Google AI Studio, ChatGPT, and DeepSeek to avoid breaking layout while fixing text.
 - **One-click PDF**: Export chat content (or full page) to a print-ready view that preserves fonts, RTL/LTR, and page breaks.
 - **SPA aware**: Watches pushState/replaceState/popstate/hashchange and re-applies on route changes.
-- **Fast and safe**: Uses MutationObserver + idle work; skips code blocks and structural containers.
+- **Fast and safe**: Uses MutationObserver + `requestIdleCallback` for non-urgent work; skips code blocks and structural containers.
+- **Modern JavaScript**: Built with 2026 patterns — `AbortController` for automatic event cleanup, `requestIdleCallback` for idle-time processing, `[...spread]` operators, and `structuredClone()` for deep comparisons.
 - **Per-site enable**: Toggle the current site right from the popup or context menu; changes apply instantly.
 
 ### Supported sites (best experience)
 - `perplexity.ai`
 - `aistudio.google.com` / `makersuite.google.com`
 - `chat.openai.com` / `chatgpt.com`
+- `deepseek.com`
 
 Works generally on most websites for typical text content as well.
 
@@ -27,12 +29,13 @@ Coming soon.
 ### Manual (developer) install
 1) Download or clone this repository.
 2) Open Chrome and go to `chrome://extensions`.
-3) Enable “Developer mode”.
-4) Click “Load unpacked” and select the extension folder (the repo root that contains `manifest.json`).
+3) Enable "Developer mode".
+4) Click "Load unpacked" and select the extension folder (the repo root that contains `manifest.json`).
 5) Pin the extension and open a supported site. Use the popup to enable the current site and configure fonts/sensitivity.
+
 ## Usage
 - Use the popup to toggle the current site, pick a font (Vazir/Shabnam/Default), and set detection sensitivity.
-- Click “PDF” in the popup to export chat or page content to a print window. Use the browser print dialog to save as PDF.
+- Click "PDF" in the popup to export chat or page content to a print window. Use the browser print dialog to save as PDF.
 - Right-click context menu provides quick actions (toggle site, re-apply, export PDF).
 
 ## Permissions
@@ -47,9 +50,17 @@ Coming soon.
 
 ## Development
 - Manifest V3, content script injected at `document_start`.
-- MutationObserver + periodic idle checks to catch late content.
+- MutationObserver + `requestIdleCallback` for idle-time processing of late content.
 - SPA route watcher via history hooks and events.
 - Site-specific selectors to avoid changing headers/sidebars on complex UIs.
+- `AbortController` for automatic event listener cleanup on teardown.
+- Block vs inline element CSS separation to prevent text wrapping issues.
+
+## Architecture
+- **Content script** (`content.js`): Core RTL detection engine with `RTLAIStudioManager` class.
+- **Background service worker** (`background.js`): Context menus, icon management, PDF export.
+- **Popup** (`popup.html` + `popup.js`): Settings UI with site toggle, font/sensitivity controls.
+- **Print helper** (`lib/print-helper.js`): PDF export support.
 
 ## Roadmap (ideas)
 - More site profiles (e.g., other chat/work apps).
