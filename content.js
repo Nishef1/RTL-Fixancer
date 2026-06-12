@@ -489,6 +489,58 @@ class RTLAIStudioManager {
             '.group\\/query [data-ai-rtl-persian-text="true"]'
         ];
 
+        const blockElements = [
+            'p[data-ai-rtl-persian-text="true"]',
+            'div[data-ai-rtl-persian-text="true"]',
+            'h1[data-ai-rtl-persian-text="true"]',
+            'h2[data-ai-rtl-persian-text="true"]',
+            'h3[data-ai-rtl-persian-text="true"]',
+            'h4[data-ai-rtl-persian-text="true"]',
+            'h5[data-ai-rtl-persian-text="true"]',
+            'h6[data-ai-rtl-persian-text="true"]',
+            'li[data-ai-rtl-persian-text="true"]',
+            'td[data-ai-rtl-persian-text="true"]',
+            'th[data-ai-rtl-persian-text="true"]',
+            'tr[data-ai-rtl-persian-text="true"]',
+            'blockquote[data-ai-rtl-persian-text="true"]',
+            'summary[data-ai-rtl-persian-text="true"]',
+            'details[data-ai-rtl-persian-text="true"]',
+            'figcaption[data-ai-rtl-persian-text="true"]',
+            'caption[data-ai-rtl-persian-text="true"]',
+            'dt[data-ai-rtl-persian-text="true"]',
+            'dd[data-ai-rtl-persian-text="true"]',
+            'address[data-ai-rtl-persian-text="true"]',
+            'output[data-ai-rtl-persian-text="true"]',
+            'thead[data-ai-rtl-persian-text="true"]',
+            'tbody[data-ai-rtl-persian-text="true"]',
+            'tfoot[data-ai-rtl-persian-text="true"]'
+        ];
+
+        const inlineElements = [
+            'span[data-ai-rtl-persian-text="true"]',
+            'a[data-ai-rtl-persian-text="true"]',
+            'button[data-ai-rtl-persian-text="true"]',
+            'label[data-ai-rtl-persian-text="true"]',
+            'option[data-ai-rtl-persian-text="true"]',
+            'optgroup[data-ai-rtl-persian-text="true"]',
+            'legend[data-ai-rtl-persian-text="true"]',
+            'cite[data-ai-rtl-persian-text="true"]',
+            'q[data-ai-rtl-persian-text="true"]',
+            'em[data-ai-rtl-persian-text="true"]',
+            'strong[data-ai-rtl-persian-text="true"]',
+            'b[data-ai-rtl-persian-text="true"]',
+            'i[data-ai-rtl-persian-text="true"]',
+            'u[data-ai-rtl-persian-text="true"]',
+            'mark[data-ai-rtl-persian-text="true"]',
+            'small[data-ai-rtl-persian-text="true"]',
+            'del[data-ai-rtl-persian-text="true"]',
+            'ins[data-ai-rtl-persian-text="true"]',
+            'sub[data-ai-rtl-persian-text="true"]',
+            'sup[data-ai-rtl-persian-text="true"]',
+            'time[data-ai-rtl-persian-text="true"]',
+            'abbr[data-ai-rtl-persian-text="true"]'
+        ];
+
         return `
             /* Font Face Definitions */
             @font-face {
@@ -506,13 +558,20 @@ class RTLAIStudioManager {
                 font-style: normal;
             }
             
-            /* Persian Text Elements */
-            ${persianElements.join(',\n            ')} {
+            /* Persian Block Elements - full RTL with isolate */
+            ${blockElements.join(',\n            ')} {
                 direction: rtl !important;
                 text-align: right !important;
                 ${fontFamilyCSS}
                 ${fontSizeCSS}
                 unicode-bidi: isolate !important;
+            }
+
+            /* Persian Inline Elements - font only, inherit direction from parent block */
+            ${inlineElements.join(',\n            ')} {
+                ${fontFamilyCSS}
+                ${fontSizeCSS}
+                unicode-bidi: inherit !important;
             }
 
             /* Persian List Containers - RTL-aware padding */
@@ -523,9 +582,6 @@ class RTLAIStudioManager {
                 padding-inline-start: 1.5em !important;
                 padding-inline-end: 0 !important;
             }
-            
-
-            
 
             /* Persian Text Children (excluding code elements) */
             [data-ai-rtl-persian-text="true"] *:not(code):not(pre):not([class*="language-"]) {
@@ -1280,19 +1336,21 @@ class RTLAIStudioManager {
         try {
             const computedStyle = getComputedStyle(element);
             
-            // اگر direction درست نیست، اصلاح کن
-            if (computedStyle.direction !== 'rtl') {
-                element.style.setProperty('direction', 'rtl', 'important');
-            }
-            
-            // اگر text-align درست نیست، اصلاح کن
-            if (computedStyle.textAlign !== 'right') {
-                element.style.setProperty('text-align', 'right', 'important');
-            }
+            // اگر direction درست نیست، اصلاح کن (فقط برای block elements)
+            if (!this.isInlineElement(element)) {
+                if (computedStyle.direction !== 'rtl') {
+                    element.style.setProperty('direction', 'rtl', 'important');
+                }
+                
+                // اگر text-align درست نیست، اصلاح کن
+                if (computedStyle.textAlign !== 'right') {
+                    element.style.setProperty('text-align', 'right', 'important');
+                }
 
-            // اگر unicode-bidi درست نیست، اصلاح کن
-            if (computedStyle.unicodeBidi !== 'isolate') {
-                element.style.setProperty('unicode-bidi', 'isolate', 'important');
+                // اگر unicode-bidi درست نیست، اصلاح کن
+                if (computedStyle.unicodeBidi !== 'isolate') {
+                    element.style.setProperty('unicode-bidi', 'isolate', 'important');
+                }
             }
 
             // فونت را بررسی کن
@@ -1514,10 +1572,6 @@ class RTLAIStudioManager {
                             parentList.style.setProperty('direction', 'rtl', 'important');
                             this.stableElements.add(parentList);
                         }
-                        // Also set inline list-style on the li for max specificity
-                        if (!this.isChatGPT) {
-                            element.style.setProperty('list-style-position', 'inside', 'important');
-                        }
                     } catch (_) {}
                 }
 
@@ -1527,17 +1581,15 @@ class RTLAIStudioManager {
                     this.processedElements.set(element, { processed: true, language: 'persian' });
                     this.cacheProcessedElement(element, text, 'persian'); // ذخیره در کش
                     this.stats.processedCount++;
-                    // For list items, add inline padding to ensure bullet area on right
-                    if (element.tagName === 'LI') {
-                        element.style.setProperty('padding-inline-start', '1.5em', 'important');
-                    }
                     if (this.isPerplexity) {
                         try {
                             const fontFamily = this.getFontFamily();
                             const fontSize = this.getFontSize();
-                            element.style.setProperty('direction', 'rtl', 'important');
-                            element.style.setProperty('text-align', 'right', 'important');
-                            element.style.setProperty('unicode-bidi', 'isolate', 'important');
+                            if (!this.isInlineElement(element)) {
+                                element.style.setProperty('direction', 'rtl', 'important');
+                                element.style.setProperty('text-align', 'right', 'important');
+                                element.style.setProperty('unicode-bidi', 'isolate', 'important');
+                            }
                             if (fontFamily) element.style.setProperty('font-family', fontFamily, 'important');
                             if (fontSize) element.style.setProperty('font-size', fontSize, 'important');
                         } catch (_) {}
@@ -1551,6 +1603,12 @@ class RTLAIStudioManager {
             console.error('Error processing element:', error);
             this.stats.errors++;
         }
+    }
+
+    // بررسی آیا عنصر inline است (برای انتخاب unicode-bidi مناسب)
+    isInlineElement(element) {
+        const inlineTags = ['SPAN', 'A', 'BUTTON', 'LABEL', 'OPTION', 'OPTGROUP', 'LEGEND', 'CITE', 'Q', 'EM', 'STRONG', 'B', 'I', 'U', 'MARK', 'SMALL', 'DEL', 'INS', 'SUB', 'SUP', 'TIME', 'ABBR'];
+        return inlineTags.includes(element.tagName);
     }
 
     // بهبود RTL Safety با کاهش محدودیت‌ها
@@ -1881,9 +1939,11 @@ class RTLAIStudioManager {
             // اعمال attribute و style های ذخیره شده
             if (cachedData.language === 'persian') {
                 element.setAttribute('data-ai-rtl-persian-text', 'true');
-                element.style.setProperty('direction', 'rtl', 'important');
-                element.style.setProperty('text-align', 'right', 'important');
-                element.style.setProperty('unicode-bidi', 'isolate', 'important');
+                if (!this.isInlineElement(element)) {
+                    element.style.setProperty('direction', 'rtl', 'important');
+                    element.style.setProperty('text-align', 'right', 'important');
+                    element.style.setProperty('unicode-bidi', 'isolate', 'important');
+                }
                 
                 const fontFamily = this.getFontFamily();
                 const fontSize = this.getFontSize();
