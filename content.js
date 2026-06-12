@@ -424,55 +424,6 @@ class RTLAIStudioManager {
 
     // تولید CSS بهینه‌شده
     generateOptimizedCSS(vazirUrl, shabnamUrl, fontFamilyCSS, fontSizeCSS) {
-        const persianElements = [
-            'p[data-ai-rtl-persian-text="true"]',
-            'span[data-ai-rtl-persian-text="true"]',
-            'h1[data-ai-rtl-persian-text="true"]',
-            'h2[data-ai-rtl-persian-text="true"]',
-            'h3[data-ai-rtl-persian-text="true"]',
-            'h4[data-ai-rtl-persian-text="true"]',
-            'h5[data-ai-rtl-persian-text="true"]',
-            'h6[data-ai-rtl-persian-text="true"]',
-            'li[data-ai-rtl-persian-text="true"]',
-            'td[data-ai-rtl-persian-text="true"]',
-            'th[data-ai-rtl-persian-text="true"]',
-            'tr[data-ai-rtl-persian-text="true"]',
-            'blockquote[data-ai-rtl-persian-text="true"]',
-            'div[data-ai-rtl-persian-text="true"]',
-            'a[data-ai-rtl-persian-text="true"]',
-            'button[data-ai-rtl-persian-text="true"]',
-            'label[data-ai-rtl-persian-text="true"]',
-            'option[data-ai-rtl-persian-text="true"]',
-            'optgroup[data-ai-rtl-persian-text="true"]',
-            'legend[data-ai-rtl-persian-text="true"]',
-            'figcaption[data-ai-rtl-persian-text="true"]',
-            'caption[data-ai-rtl-persian-text="true"]',
-            'summary[data-ai-rtl-persian-text="true"]',
-            'details[data-ai-rtl-persian-text="true"]',
-            'cite[data-ai-rtl-persian-text="true"]',
-            'q[data-ai-rtl-persian-text="true"]',
-            'em[data-ai-rtl-persian-text="true"]',
-            'strong[data-ai-rtl-persian-text="true"]',
-            'b[data-ai-rtl-persian-text="true"]',
-            'i[data-ai-rtl-persian-text="true"]',
-            'u[data-ai-rtl-persian-text="true"]',
-            'mark[data-ai-rtl-persian-text="true"]',
-            'small[data-ai-rtl-persian-text="true"]',
-            'del[data-ai-rtl-persian-text="true"]',
-            'ins[data-ai-rtl-persian-text="true"]',
-            'sub[data-ai-rtl-persian-text="true"]',
-            'sup[data-ai-rtl-persian-text="true"]',
-            'time[data-ai-rtl-persian-text="true"]',
-            'abbr[data-ai-rtl-persian-text="true"]',
-            'dd[data-ai-rtl-persian-text="true"]',
-            'dt[data-ai-rtl-persian-text="true"]',
-            'address[data-ai-rtl-persian-text="true"]',
-            'output[data-ai-rtl-persian-text="true"]',
-            'thead[data-ai-rtl-persian-text="true"]',
-            'tbody[data-ai-rtl-persian-text="true"]',
-            'tfoot[data-ai-rtl-persian-text="true"]'
-        ];
-
         const persianInputs = [
             'input[data-ai-rtl-persian-input="true"]',
             'textarea[data-ai-rtl-persian-input="true"]',
@@ -674,8 +625,6 @@ class RTLAIStudioManager {
         if (processed > 0) {
             
         }
-
-        this.processInputs(document);
     }
 
     processPerplexitySpecialElements() {
@@ -708,8 +657,6 @@ class RTLAIStudioManager {
         if (processed > 0) {
             
         }
-
-        this.processInputs(document);
     }
 
     // اعمال فونت‌های پیش‌فرض در صورت عدم موفقیت
@@ -1127,10 +1074,6 @@ class RTLAIStudioManager {
         }
     }
 
-    delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
     processInputs(root = document) {
         try {
         let inputSelector = 
@@ -1395,9 +1338,6 @@ class RTLAIStudioManager {
                 if (container) container.setAttribute('data-ai-rtl-processed', 'true');
             }
         });
-
-        // پردازش ویژه input های ChatGPT
-        this.processInputs(document);
     }
 
     // پردازش ویژه input های ChatGPT
@@ -1616,18 +1556,14 @@ class RTLAIStudioManager {
         const safeTags = ['P', 'SPAN', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TD', 'TH', 'BLOCKQUOTE', 'DIV'];
         if (!safeTags.includes(element.tagName)) return false;
 
+        const children = element.children;
+
         // کاهش محدودیت برای DIV ها
         if (element.tagName === 'DIV') {
             // محدودیت نسبی بر اساس viewport برای جلوگیری از دستکاری باکس‌های بزرگ طرح‌بندی
             const vw = Math.max(1, window.innerWidth || 1200);
             const vh = Math.max(1, window.innerHeight || 800);
             if (element.offsetWidth > vw * 0.8 || element.offsetHeight > vh * 0.6) return false;
-            if (element.children.length > 8) return false; // افزایش از 5 به 8
-        }
-
-        // محدودیت فرزندان - DIVها سختگیرانه، بقیه برچسبها آزادتر
-        const children = element.children;
-        if (element.tagName === 'DIV') {
             if (children.length > 8) return false;
         } else {
             // برچسبهای inline مثل P میتوانند فرزندان زیادی داشته باشند (code, strong, a, ...)
@@ -2025,12 +1961,13 @@ class RTLAIStudioManager {
 
             // برای contenteditable elements در ChatGPT
             if (input.contentEditable === 'true') {
-                input.style.setProperty('writing-mode', 'horizontal-tb', 'important');
                 
                 // اضافه کردن event listener برای کیبورد
                 if (!input.hasAttribute('data-chatgpt-keyboard-handled')) {
                     input.setAttribute('data-chatgpt-keyboard-handled', 'true');
                     
+                    const keydownController = new AbortController();
+                    input._keydownAbortController = keydownController;
                     input.addEventListener('keydown', (e) => {
                         // تنظیم مجدد direction در صورت لزوم
                         setTimeout(() => {
@@ -2039,7 +1976,7 @@ class RTLAIStudioManager {
                                 input.style.setProperty('text-align', 'right', 'important');
                             }
                         }, 10);
-                    });
+                    }, { signal: keydownController.signal });
                 }
             }
 
@@ -2182,7 +2119,6 @@ class RTLAIStudioManager {
 
         
         this.cleanup();
-        this.removeAllRTLAttributes();
         this.injectPersianFonts();
         
         if (this.config.isEnabled && this.isSiteEnabled()) {
@@ -2235,6 +2171,7 @@ class RTLAIStudioManager {
         if (this.inputCheckTimer) { clearInterval(this.inputCheckTimer); this.inputCheckTimer = null; }
         if (this.mutationDebounceTimer) { clearTimeout(this.mutationDebounceTimer); this.mutationDebounceTimer = null; }
         if (this.intersectionObserverTimer) { clearInterval(this.intersectionObserverTimer); this.intersectionObserverTimer = null; }
+        if (this.spaPollTimer) { clearInterval(this.spaPollTimer); this.spaPollTimer = null; }
         
         // Clear all timers managed by the timers Map (consolidated via DRY refactor)
         this.clearAllTimers();
@@ -2307,33 +2244,6 @@ class RTLAIStudioManager {
     removeFontStyles() {
         const fontStyles = document.querySelectorAll('#ai-rtl-fonts, #ai-rtl-fallback-fonts');
         fontStyles.forEach(style => style.remove());
-    }
-
-    // Attach event listeners using AbortController so they can be detached in bulk when
-    // the input is removed from the DOM. Returns the controller for later detachment.
-    _attachAbortController(input, events, handler) {
-        try {
-            const controller = new AbortController();
-            const signal = controller.signal;
-            for (const evt of events) {
-                input.addEventListener(evt, handler, { signal, passive: evt === 'input' || evt === 'keyup' || evt === 'keydown' });
-            }
-            return controller;
-        } catch (e) {
-            // Fallback: plain addEventListener (older browsers, no AbortController support)
-            for (const evt of events) {
-                input.addEventListener(evt, handler);
-            }
-            return null;
-        }
-    }
-
-    _detachAbortController(input, controller) {
-        try {
-            if (controller && typeof controller.abort === 'function') {
-                controller.abort();
-            }
-        } catch (_) {}
     }
 
     // Attach event listeners using AbortController so they can be detached in bulk when
@@ -2494,8 +2404,7 @@ class MessageHandlerAIStudio {
                         break;
                     case 'nativePrint':
                         try {
-                            const history = getConversationHistory();
-                            const firstMessage = history[0]?.content.substring(0,50) || 'Chat Conversation';
+                            const firstMessage = (document.querySelector('.message-content, .prose, .markdown')?.textContent || document.title || 'Chat Conversation').substring(0, 50);
                             const title = `${firstMessage} - ${new Date().toLocaleDateString()}`;
                             
                             document.title = title;
@@ -2591,35 +2500,6 @@ document.head.removeChild(style);
 
         // Restore original scroll position
         scroller.scrollTop = savedScrollTop;
-    }
-
-
-
-    escapeHtml(unsafe) {
-        try {
-            return String(unsafe || '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        } catch (_) {
-            return '';
-        }
-    }
-
-
-    clickExpandButtons(root) {
-        try {
-            const expanderTexts = /(show more|read more|expand|continue|view more|see more|نمایش بیشتر|ادامه|بیشتر|مشاهده بیشتر)/i;
-            const buttons = root.querySelectorAll('button, a, [role="button"], .cursor-pointer');
-            buttons.forEach(btn => {
-                const t = (btn.innerText || btn.textContent || '').trim();
-                if (expanderTexts.test(t)) {
-                    try { btn.click(); } catch (_) {}
-                }
-            });
-        } catch (_) {}
     }
 
 
