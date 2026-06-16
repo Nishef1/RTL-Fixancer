@@ -1484,10 +1484,9 @@ class RTLAIStudioManager {
 
             // در Perplexity اگر در محتوای اصلی و دارای حروف فارسی باشد، فارسی را بر انگلیسی/نامشخص ترجیح بده
             if (this.isPerplexity) {
-                const inMainContent = element.closest('.prose, .answer, [data-testid="answer"]');
+                const inMainContent = element.closest('.prose, .answer, [data-testid="answer"], [data-cplx-component="message-block-answer"], .markdown, .group\\/query, .max-w-threadContentWidth');
                 const hasPersian = PERSIAN_REGEX.test(text);
-                const tagOk = ['P', 'SPAN', 'DIV', 'LI', 'H1', 'H2', 'H3'].includes(element.tagName);
-                if (inMainContent && hasPersian && tagOk) {
+                if (inMainContent && hasPersian) {
                     language = 'persian';
                 }
             }
@@ -1535,7 +1534,10 @@ class RTLAIStudioManager {
 
     // بهبود RTL Safety با کاهش محدودیت‌ها
     isAbsolutelySafeForRTL(element) {
-        const safeTags = ['P', 'SPAN', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TD', 'TH', 'BLOCKQUOTE', 'DIV'];
+        const safeTags = ['P', 'SPAN', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TD', 'TH', 'BLOCKQUOTE', 'DIV',
+            'A', 'BUTTON', 'LABEL', 'OPTION', 'OPTGROUP', 'LEGEND', 'FIGCAPTION', 'CAPTION', 'SUMMARY', 'DETAILS',
+            'CITE', 'Q', 'EM', 'STRONG', 'B', 'I', 'U', 'MARK', 'SMALL', 'DEL', 'INS', 'SUB', 'SUP', 'TIME', 'ABBR',
+            'DD', 'DT', 'ADDRESS', 'OUTPUT'];
         if (!safeTags.includes(element.tagName)) return false;
 
         const children = element.children;
