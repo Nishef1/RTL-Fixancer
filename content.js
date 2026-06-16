@@ -2400,8 +2400,6 @@ class MessageHandlerAIStudio {
                             document.body.innerHTML = originalBody;
                             const styleEl = document.getElementById('rtl-print-style');
                             if (styleEl) document.head.removeChild(styleEl);
-                            // Re-initialize the extension after body restore
-                            try { initializeAIStudio(); } catch (_) {}
                         } catch(error) {
                             chrome.runtime.sendMessage({
                                 type: 'showNotification',
