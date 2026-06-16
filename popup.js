@@ -370,19 +370,19 @@ class PopupManagerInstantTrigger {
 
             this.addSafeEventListener('fontSelect', 'change', async (e) => {
                 await this.updateSetting('selectedFont', e.target.value);
-                await this.triggerImmediateApply();
+                await this.triggerFullReload();
                 this.showSuccessMessage('فونت تغییر کرد');
             });
 
             this.addSafeEventListener('fontSizeSelect', 'change', async (e) => {
                 await this.updateSetting('fontSize', e.target.value);
-                await this.triggerImmediateApply();
+                await this.triggerFullReload();
                 this.showSuccessMessage('سایز فونت تغییر کرد');
             });
 
             this.addSafeEventListener('detectionMode', 'change', async (e) => {
                 await this.updateSetting('detectionMode', e.target.value);
-                await this.triggerImmediateReprocess();
+                await this.triggerFullReload();
                 this.showSuccessMessage('حساسیت تشخیص تغییر کرد');
             });
 
