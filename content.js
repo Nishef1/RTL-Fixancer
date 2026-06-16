@@ -1175,6 +1175,21 @@ class RTLAIStudioManager {
             textElements.forEach(element => {
                 if (recheckCount >= config.maxRecheck) return;
 
+                // If marked English but has Persian children, upgrade to Persian
+                if (element.hasAttribute('data-ai-rtl-english-text') &&
+                    !element.hasAttribute('data-ai-rtl-persian-text')) {
+                    const hasPersianChild = element.querySelector('[data-ai-rtl-persian-text]');
+                    if (hasPersianChild) {
+                        element.removeAttribute('data-ai-rtl-english-text');
+                        element.setAttribute('data-ai-rtl-persian-text', 'true');
+                        this.stableElements.delete(element);
+                        this.processedTextCache.delete(this.generateElementSignature(element, this.getCleanText(element)));
+                        this.processElement(element);
+                        recheckCount++;
+                    }
+                    return;
+                }
+
                 const text = this.getCleanText(element);
                 if (!text || text.length < 1) return;
 
@@ -1233,6 +1248,21 @@ class RTLAIStudioManager {
 
                 const text = this.getCleanText(element);
                 if (!text || text.length < 1) return;
+
+                // If marked English but has Persian children, upgrade to Persian
+                if (element.hasAttribute('data-ai-rtl-english-text') &&
+                    !element.hasAttribute('data-ai-rtl-persian-text')) {
+                    const hasPersianChild = element.querySelector('[data-ai-rtl-persian-text]');
+                    if (hasPersianChild) {
+                        element.removeAttribute('data-ai-rtl-english-text');
+                        element.setAttribute('data-ai-rtl-persian-text', 'true');
+                        this.stableElements.delete(element);
+                        this.processedTextCache.delete(this.generateElementSignature(element, this.getCleanText(element)));
+                        this.processElement(element);
+                        recheckCount++;
+                    }
+                    return;
+                }
 
                 // اگر متن فارسی دارد اما attribute ندارد
                 if (this.hasAnyPersianChar(text)) {
