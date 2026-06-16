@@ -514,9 +514,11 @@ class RTLAIStudioManager {
                 unicode-bidi: isolate !important;
             }
 
-            /* Persian Inline Elements - inherit direction from parent block */
+            /* Persian Inline Elements - also get direction when no block ancestor has it */
             ${inlineElements.join(',\n            ')} {
-                unicode-bidi: inherit !important;
+                direction: rtl !important;
+                text-align: right !important;
+                unicode-bidi: isolate !important;
             }
 
             /* Persian List Containers - RTL-aware padding */
