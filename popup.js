@@ -530,11 +530,15 @@ class PopupManagerInstantTrigger {
         }
     }
 
-    async updateSetting(key, value) {
+    async updateSetting(key, value, _retryCount = 0) {
         if (this.settingsUpdateInProgress) {
+            if (_retryCount > 10) {
+                this.logError(`Settings update for ${key} gave up after 10 retries`, new Error('Retry limit exceeded'));
+                return;
+            }
             this.logInfo(`Settings update in progress, queuing ${key}`);
             await new Promise(resolve => setTimeout(resolve, 200));
-            return this.updateSetting(key, value);
+            return this.updateSetting(key, value, _retryCount + 1);
         }
 
         this.settingsUpdateInProgress = true;

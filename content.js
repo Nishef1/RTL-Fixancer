@@ -1515,8 +1515,11 @@ class RTLAIStudioManager {
                     this.stats.processedCount++;
                 }
             } else {
-                element.removeAttribute('data-ai-rtl-persian-text');
-                element.removeAttribute('data-ai-rtl-english-text');
+                if (!element.hasAttribute('data-ai-rtl-english-text')) {
+                    element.removeAttribute('data-ai-rtl-persian-text');
+                    element.setAttribute('data-ai-rtl-english-text', 'true');
+                    this.cacheProcessedElement(element, text, 'english');
+                }
             }
         } catch (error) {
             console.error('Error processing element:', error);
@@ -2294,12 +2297,10 @@ class RTLAIStudioManager {
 
     // بررسی دوره‌ای برای زمانی که تب جدیدی باز می‌شود و site-enabled از قبل ست شده اما تب هنوز شروع نشده
     startEnableSitePolling() {
-        // Re-load settings shortly after startup in case the tab was opened before sync storage was available,
-        // and ensure extension is started if the current site is enabled.
-        const pollId = setInterval(() => {
+        this.setTimer('enableSitePolling', () => {
             try {
                 if (this.hasInitialized) {
-                    clearInterval(pollId);
+                    this.clearTimer('enableSitePolling');
                     return;
                 }
                 if (this.config && this.config.isEnabled && this.isSiteEnabled()) {
@@ -2308,7 +2309,7 @@ class RTLAIStudioManager {
             } catch (_) {}
         }, 1500);
         // Stop polling after 30 seconds regardless
-        setTimeout(() => clearInterval(pollId), 30000);
+        setTimeout(() => this.clearTimer('enableSitePolling'), 30000);
     }
 }
 
@@ -2366,46 +2367,41 @@ class MessageHandlerAIStudio {
                             
                             document.title = title;
                             const originalBody = document.body.innerHTML;
-const printContainer = document.createElement('div');
-printContainer.className = 'print-optimized';
-chrome.storage.sync.get(['textOnlyMode', 'includeNotes'], function(result) {
-const clonedContent = document.querySelector('.main-content').cloneNode(true);
+                            const printContainer = document.createElement('div');
+                            printContainer.className = 'print-optimized';
+                            const clonedContent = document.querySelector('.main-content')?.cloneNode(true) || document.body.cloneNode(true);
 
-if(result.textOnlyMode) {
-  clonedContent.querySelectorAll('img, video, iframe').forEach(el => el.remove());
-}
+                            // Remove interactive elements
+                            clonedContent.querySelectorAll('button, input, .interactive, .delete-btn').forEach(el => el.remove());
 
-if(!result.includeNotes) {
-  clonedContent.querySelectorAll('.note-section').forEach(el => el.remove());
-}
+                            // Add print-specific styling
+                            const style = document.createElement('style');
+                            style.id = 'rtl-print-style';
+                            style.textContent = `
+                                .print-optimized {
+                                    max-width: 100%!important;
+                                    padding: 20px!important;
+                                    direction: rtl !important;
+                                }
+                                .print-optimized img {
+                                    max-width: 100%!important;
+                                    height: auto!important;
+                                }
+                            `;
 
-// Remove interactive elements
-clonedContent.querySelectorAll('button, input, .interactive').forEach(el => el.remove());
+                            document.head.appendChild(style);
+                            printContainer.appendChild(clonedContent);
+                            document.body.innerHTML = '';
+                            document.body.appendChild(printContainer);
 
-// Add print-specific styling
-const style = document.createElement('style');
-style.textContent = `
-.print-optimized {
-    max-width: 100%!important;
-    padding: 20px!important;
-}
-.print-optimized img {
-    max-width: 100%!important;
-    height: auto!important;
-}
-`;
+                            window.print();
 
-document.head.appendChild(style);
-printContainer.appendChild(clonedContent);
-document.body.innerHTML = '';
-document.body.appendChild(printContainer);
-
-window.print();
-
-// Restore original content
-document.body.innerHTML = originalBody;
-document.head.removeChild(style);
-})
+                            // Restore original content
+                            document.body.innerHTML = originalBody;
+                            const styleEl = document.getElementById('rtl-print-style');
+                            if (styleEl) document.head.removeChild(styleEl);
+                            // Re-initialize the extension after body restore
+                            try { initializeAIStudio(); } catch (_) {}
                         } catch(error) {
                             chrome.runtime.sendMessage({
                                 type: 'showNotification',

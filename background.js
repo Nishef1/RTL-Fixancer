@@ -14,39 +14,57 @@ function setSyncStorage(data) {
 }
 
 // --- Context Menu Creation ---
+let contextMenusCreating = false;
+let contextMenusTimeout = null;
 function createContextMenus() {
-    try {
-        chrome.contextMenus.removeAll(() => {
-            const menus = [
-                {
-                    id: 'rtl_parent',
-                    title: 'RTL Fixancer',
-                    contexts: ['all']
-                },
-                {
-                    id: 'rtl_toggle_current_domain',
-                    parentId: 'rtl_parent',
-                    title: 'فعال/غیرفعال کردن دامنه فعلی',
-                    contexts: ['all']
-                },
-                {
-                    id: 'rtl_apply_reload',
-                    parentId: 'rtl_parent',
-                    title: 'اعمال مجدد در این صفحه',
-                    contexts: ['all']
-                },
-                {
-                    id: 'rtl_export_pdf',
-                    parentId: 'rtl_parent',
-                    title: '⬇️ دانلود PDF از متن صفحه',
-                    contexts: ['all']
+    if (contextMenusCreating) return;
+    contextMenusCreating = true;
+    // Safety timeout to reset guard in case of unexpected issues
+    clearTimeout(contextMenusTimeout);
+    contextMenusTimeout = setTimeout(() => { contextMenusCreating = false; }, 5000);
+    chrome.contextMenus.removeAll(() => {
+        if (chrome.runtime.lastError) {
+            console.warn('removeAll failed:', chrome.runtime.lastError);
+        }
+        const menus = [
+            {
+                id: 'rtl_parent',
+                title: 'RTL Fixancer',
+                contexts: ['all']
+            },
+            {
+                id: 'rtl_toggle_current_domain',
+                parentId: 'rtl_parent',
+                title: 'فعال/غیرفعال کردن دامنه فعلی',
+                contexts: ['all']
+            },
+            {
+                id: 'rtl_apply_reload',
+                parentId: 'rtl_parent',
+                title: 'اعمال مجدد در این صفحه',
+                contexts: ['all']
+            },
+            {
+                id: 'rtl_export_pdf',
+                parentId: 'rtl_parent',
+                title: '⬇️ دانلود PDF از متن صفحه',
+                contexts: ['all']
+            }
+        ];
+        let created = 0;
+        menus.forEach(menu => {
+            chrome.contextMenus.create(menu, () => {
+                if (chrome.runtime.lastError) {
+                    console.warn('create failed for', menu.id, ':', chrome.runtime.lastError);
                 }
-            ];
-            menus.forEach(menu => chrome.contextMenus.create(menu));
+                created++;
+                if (created === menus.length) {
+                    clearTimeout(contextMenusTimeout);
+                    contextMenusCreating = false;
+                }
+            });
         });
-    } catch (e) {
-        console.warn('Failed to create context menus:', e);
-    }
+    });
 }
 
 // --- Subdomain Matching ---
