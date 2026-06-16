@@ -183,6 +183,9 @@ class RTLAIStudioManager {
             // پردازش سریع عناصر جدید با استفاده از cache
             this.processNewElementsWithCache();
             
+            // Upgrade English-marked parents that have Persian children
+            this.upgradeEnglishParentsWithPersianChildren();
+            
             // فقط برای سایت‌های چت: پردازش محدود عناصر خارج از viewport
             if (this.isSpecialChatSite()) {
                 this.processChatElementsOptimized();
@@ -191,6 +194,27 @@ class RTLAIStudioManager {
             console.error('Force processing error:', error);
             this.stats.errors++;
         }
+    }
+
+    // Find elements marked English that contain Persian children and upgrade them
+    upgradeEnglishParentsWithPersianChildren() {
+        try {
+            const englishElements = document.querySelectorAll('[data-ai-rtl-english-text]:not([data-ai-rtl-persian-text])');
+            let upgraded = 0;
+            const maxUpgrade = 50;
+            englishElements.forEach(el => {
+                if (upgraded >= maxUpgrade) return;
+                if (el.querySelector('[data-ai-rtl-persian-text]')) {
+                    el.removeAttribute('data-ai-rtl-english-text');
+                    const text = this.getCleanText(el);
+                    this.processedTextCache.delete(this.generateElementSignature(el, text));
+                    this.stableElements.delete(el);
+                    this.processedElements.delete(el);
+                    this.processElement(el);
+                    upgraded++;
+                }
+            });
+        } catch (_) {}
     }
 
     // روش جدید: پردازش با استفاده از cache signature
