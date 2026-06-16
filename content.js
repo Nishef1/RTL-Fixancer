@@ -1503,9 +1503,19 @@ class RTLAIStudioManager {
         if (!this.config.isEnabled || !this.isSafeElementForProcessing(element)) return;
 
         try {
-
             const text = this.getCleanText(element);
             if (!text || text.length < 1) return;
+
+            // If marked English but has Persian children, upgrade to Persian
+            if (element.hasAttribute('data-ai-rtl-english-text') &&
+                !element.hasAttribute('data-ai-rtl-persian-text')) {
+                if (element.querySelector('[data-ai-rtl-persian-text]')) {
+                    element.removeAttribute('data-ai-rtl-english-text');
+                    this.processedTextCache.delete(this.generateElementSignature(element, text));
+                    this.stableElements.delete(element);
+                    this.processedElements.delete(element);
+                }
+            }
 
             // بررسی کش قبل از پردازش
             if (this.isElementAlreadyProcessed(element, text)) {
