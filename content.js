@@ -714,7 +714,7 @@ class RTLAIStudioManager {
                 if (this.isSpecialChatSite() && mutation.type === 'characterData') {
                     const targetNode = mutation.target;
                     const el = targetNode.nodeType === Node.TEXT_NODE ? targetNode.parentElement : targetNode;
-                    if (!el) return false;
+                    if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
                     const chatSelectors = [
                         // AI Studio
                         '.conversation-container', '.chat-message', '.model-response', '.message-content',
@@ -1054,7 +1054,7 @@ class RTLAIStudioManager {
                 // برای تغییرات متن موجود در سایت‌های چت
                 const node = mutation.target;
                 const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-                if (el && this.isSafeElementForProcessing(el) && !this.stableElements.has(el)) {
+                if (el && el.nodeType === Node.ELEMENT_NODE && this.isSafeElementForProcessing(el) && !this.stableElements.has(el)) {
                     elementsToProcess.add(el);
                     // والد نزدیک پیام را هم در نظر بگیر
                     const parentMsg = el.closest('.chat-message, .model-response, .message-content, .prose, .answer, [data-testid="answer"]');
@@ -1172,16 +1172,14 @@ class RTLAIStudioManager {
             'Perplexity': {
                 selectors: '.prose :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), .answer :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
                            '[data-testid="answer"] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), [data-cplx-component="message-block-answer"] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                           '.max-w-threadContentWidth :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), .group\\/query :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                           TEXT_TAGS_SELECTOR,
+                           '.max-w-threadContentWidth :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), .group\\/query :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])',
                 maxRecheck: 60,
                 logName: 'Perplexity'
             },
             'ChatGPT': {
                 selectors: '[data-testid="conversation-turn"] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
                            '[data-message-author-role] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                           '.markdown :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
-                           TEXT_TAGS_SELECTOR,
+                           '.markdown :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])',
                 maxRecheck: 70,
                 logName: 'ChatGPT'
             }
@@ -1382,8 +1380,10 @@ class RTLAIStudioManager {
             const text = this.getCleanText(element);
             if (text && this.hasAnyPersianChar(text)) {
                 this.processElement(element);
-                const container = element.closest('[data-testid="conversation-turn"], [data-message-author-role], .markdown');
-                if (container) container.setAttribute('data-ai-rtl-processed', 'true');
+                if (this.processedElements.has(element)) {
+                    const container = element.closest('[data-testid="conversation-turn"], [data-message-author-role], .markdown');
+                    if (container) container.setAttribute('data-ai-rtl-processed', 'true');
+                }
             }
         });
     }
@@ -1729,6 +1729,10 @@ class RTLAIStudioManager {
             if (input.parentNode) {
                 removalObserver.observe(input.parentNode, { childList: true });
             }
+            // Auto-disconnect after 60s — persistent editors don't need ongoing monitoring
+            setTimeout(() => {
+                try { removalObserver.disconnect(); } catch (_) {}
+            }, 60000);
         } catch (_) {}
 
         handler();
@@ -2123,9 +2127,10 @@ class RTLAIStudioManager {
 
         
         // حذف همه attributes
-        document.querySelectorAll('[data-ai-rtl-persian-text], [data-ai-rtl-english-text]').forEach(el => {
+        document.querySelectorAll('[data-ai-rtl-persian-text], [data-ai-rtl-english-text], [data-ai-rtl-processed]').forEach(el => {
             el.removeAttribute('data-ai-rtl-persian-text');
             el.removeAttribute('data-ai-rtl-english-text');
+            el.removeAttribute('data-ai-rtl-processed');
             this.stableElements.delete(el);
         });
 
@@ -2190,7 +2195,8 @@ class RTLAIStudioManager {
             'data-ai-rtl-english-text',
             'data-ai-rtl-persian-input',
             'data-ai-rtl-english-input',
-            'data-rtl-handled-ai-studio'
+            'data-rtl-handled-ai-studio',
+            'data-ai-rtl-processed'
         ];
 
         attributes.forEach(attr => {
@@ -2433,41 +2439,24 @@ class MessageHandlerAIStudio {
                             const firstMessage = (document.querySelector('.message-content, .prose, .markdown')?.textContent || document.title || 'Chat Conversation').substring(0, 50);
                             const title = `${firstMessage} - ${new Date().toLocaleDateString()}`;
                             
-                            document.title = title;
-                            const originalBody = document.body.innerHTML;
-                            const printContainer = document.createElement('div');
-                            printContainer.className = 'print-optimized';
                             const clonedContent = document.querySelector('.main-content')?.cloneNode(true) || document.body.cloneNode(true);
-
-                            // Remove interactive elements
                             clonedContent.querySelectorAll('button, input, .interactive, .delete-btn').forEach(el => el.remove());
 
-                            // Add print-specific styling
-                            const style = document.createElement('style');
-                            style.id = 'rtl-print-style';
-                            style.textContent = `
-                                .print-optimized {
-                                    max-width: 100%!important;
-                                    padding: 20px!important;
-                                    direction: rtl !important;
-                                }
-                                .print-optimized img {
-                                    max-width: 100%!important;
-                                    height: auto!important;
-                                }
-                            `;
-
-                            document.head.appendChild(style);
-                            printContainer.appendChild(clonedContent);
-                            document.body.innerHTML = '';
-                            document.body.appendChild(printContainer);
-
-                            window.print();
-
-                            // Restore original content
-                            document.body.innerHTML = originalBody;
-                            const styleEl = document.getElementById('rtl-print-style');
-                            if (styleEl) document.head.removeChild(styleEl);
+                            const printWindow = window.open('', '_blank', 'width=800,height=600');
+                            if (printWindow) {
+                                printWindow.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
+                                    <style>
+                                        body { max-width: 100%; padding: 20px; direction: rtl; font-family: Tahoma, Arial, sans-serif; }
+                                        img { max-width: 100%; height: auto; }
+                                        button, input, .interactive, .delete-btn { display: none; }
+                                    </style></head><body></body></html>`);
+                                printWindow.document.body.appendChild(clonedContent);
+                                printWindow.document.close();
+                                printWindow.focus();
+                                setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
+                            } else {
+                                window.print();
+                            }
                         } catch(error) {
                             chrome.runtime.sendMessage({
                                 type: 'showNotification',
