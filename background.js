@@ -1,7 +1,21 @@
-
 // --- Utility Promise Wrappers ---
-function getSyncStorage(defaults) {
-    return new Promise(resolve => chrome.storage.sync.get(defaults, resolve));
+const DEFAULT_SETTINGS = {
+    isEnabled: true,
+    selectedFont: 'vazir',
+    fontSize: 'default',
+    detectionMode: 'medium',
+    enabledSites: []
+};
+
+const INJECTABLE_PROTOCOLS = new Set(['http:', 'https:']);
+
+function getSyncStorage(defaults = DEFAULT_SETTINGS) {
+    return new Promise((resolve, reject) => {
+        chrome.storage.sync.get(defaults, (result) => {
+            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+            else resolve(result);
+        });
+    });
 }
 
 function setSyncStorage(data) {
@@ -13,19 +27,39 @@ function setSyncStorage(data) {
     });
 }
 
+function isInjectableUrl(tabUrl) {
+    try {
+        if (!tabUrl) return false;
+        return INJECTABLE_PROTOCOLS.has(new URL(tabUrl).protocol);
+    } catch (_) {
+        return false;
+    }
+}
+
+function getHostname(tabUrl) {
+    try {
+        if (!isInjectableUrl(tabUrl)) return '';
+        return new URL(tabUrl).hostname.toLowerCase();
+    } catch (_) {
+        return '';
+    }
+}
+
 // --- Context Menu Creation ---
 let contextMenusCreating = false;
 let contextMenusTimeout = null;
+
 function createContextMenus() {
-    if (contextMenusCreating) return;
+    if (contextMenusCreating || !chrome.contextMenus) return;
     contextMenusCreating = true;
-    // Safety timeout to reset guard in case of unexpected issues
     clearTimeout(contextMenusTimeout);
     contextMenusTimeout = setTimeout(() => { contextMenusCreating = false; }, 5000);
+
     chrome.contextMenus.removeAll(() => {
         if (chrome.runtime.lastError) {
-            console.warn('removeAll failed:', chrome.runtime.lastError);
+            console.warn('removeAll failed:', chrome.runtime.lastError.message);
         }
+
         const menus = [
             {
                 id: 'rtl_parent',
@@ -51,11 +85,12 @@ function createContextMenus() {
                 contexts: ['all']
             }
         ];
+
         let created = 0;
         menus.forEach(menu => {
             chrome.contextMenus.create(menu, () => {
                 if (chrome.runtime.lastError) {
-                    console.warn('create failed for', menu.id, ':', chrome.runtime.lastError);
+                    console.warn('create failed for', menu.id, ':', chrome.runtime.lastError.message);
                 }
                 created++;
                 if (created === menus.length) {
@@ -69,9 +104,23 @@ function createContextMenus() {
 
 // --- Subdomain Matching ---
 function hostnameMatch(enabledSites, hostname) {
-    return enabledSites.some(
-        site => hostname === site || hostname.endsWith('.' + site)
-    );
+    if (!hostname || !Array.isArray(enabledSites)) return false;
+    const normalizedHostname = hostname.toLowerCase();
+    return enabledSites.some(site => {
+        if (typeof site !== 'string') return false;
+        const normalizedSite = site.toLowerCase();
+        return normalizedHostname === normalizedSite || normalizedHostname.endsWith('.' + normalizedSite);
+    });
+}
+
+function toggleHostname(enabledSites, hostname) {
+    const sites = new Set(Array.isArray(enabledSites) ? enabledSites : []);
+    if (hostnameMatch(Array.from(sites), hostname)) {
+        sites.delete(hostname);
+    } else {
+        sites.add(hostname);
+    }
+    return Array.from(sites).sort();
 }
 
 // --- Icon Paths Utility ---
@@ -106,20 +155,80 @@ function debounceUpdateIcon(tabId, url) {
 async function updateIconForTab(tabId, tabUrl) {
     try {
         if (!tabUrl) {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tab && tab.id === tabId) tabUrl = tab.url || '';
+            const tab = await chrome.tabs.get(tabId).catch(() => null);
+            tabUrl = tab?.url || '';
         }
-        if (!tabUrl || tabUrl.startsWith('chrome://') || tabUrl.startsWith('chrome-extension://')) {
+
+        if (!isInjectableUrl(tabUrl)) {
             await chrome.action.setIcon({ tabId, path: getIconPaths(false) });
             return;
         }
-        const hostname = new URL(tabUrl).hostname;
-        const defaults = { enabledSites: [] };
-        const settings = await getSyncStorage(defaults);
-        const enabled = Array.isArray(settings.enabledSites) && hostnameMatch(settings.enabledSites, hostname);
+
+        const hostname = getHostname(tabUrl);
+        const settings = await getSyncStorage(DEFAULT_SETTINGS);
+        const enabled = hostnameMatch(settings.enabledSites, hostname);
         await chrome.action.setIcon({ tabId, path: getIconPaths(enabled) });
     } catch (e) {
         console.error('updateIconForTab error:', e);
+    }
+}
+
+function sendMessageToTab(tabId, message) {
+    return new Promise(resolve => {
+        try {
+            chrome.tabs.sendMessage(tabId, message, response => {
+                if (chrome.runtime.lastError) {
+                    resolve({ ok: false, error: chrome.runtime.lastError.message });
+                    return;
+                }
+                resolve({ ok: true, response });
+            });
+        } catch (error) {
+            resolve({ ok: false, error: error.message });
+        }
+    });
+}
+
+async function executeScriptSafely(tabId, details) {
+    try {
+        await chrome.scripting.executeScript({ target: { tabId }, ...details });
+        return { ok: true };
+    } catch (error) {
+        return { ok: false, error: error.message };
+    }
+}
+
+async function requestContentReload(tabId, settings) {
+    const message = { action: 'fullReload', ...settings };
+    let result = await sendMessageToTab(tabId, message);
+    if (result.ok) return result;
+
+    const injection = await executeScriptSafely(tabId, { files: ['content.js'] });
+    if (!injection.ok) return injection;
+
+    await new Promise(resolve => setTimeout(resolve, 250));
+    return sendMessageToTab(tabId, message);
+}
+
+async function exportPdf(tab) {
+    if (!tab?.id || !isInjectableUrl(tab.url)) {
+        console.warn('Export skipped: unsupported tab URL');
+        return;
+    }
+
+    let result = await sendMessageToTab(tab.id, { action: 'exportPdf' });
+    if (result.ok) return;
+
+    const injection = await executeScriptSafely(tab.id, { files: ['content.js'] });
+    if (injection.ok) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        result = await sendMessageToTab(tab.id, { action: 'exportPdf' });
+        if (result.ok) return;
+    }
+
+    const printFallback = await executeScriptSafely(tab.id, { func: () => window.print() });
+    if (!printFallback.ok) {
+        console.error('Export PDF failed:', result.error || injection.error || printFallback.error);
     }
 }
 
@@ -136,158 +245,98 @@ if (chrome.runtime.onStartup) {
     });
 }
 
-chrome.contextMenus && chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-    try {
-        if (!tab || !tab.id || !tab.url) return;
-        const url = new URL(tab.url);
-        const hostname = url.hostname;
-        const defaults = {
-            isEnabled: true,
-            selectedFont: 'vazir',
-            fontSize: 'default',
-            detectionMode: 'medium',
-            enabledSites: []
-        };
+if (chrome.contextMenus) {
+    chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+        try {
+            if (!tab?.id || !isInjectableUrl(tab.url)) return;
+            const hostname = getHostname(tab.url);
+            if (!hostname) return;
 
-        if (info.menuItemId === 'rtl_toggle_current_domain') {
-            let settings;
-            try {
-                settings = await getSyncStorage(defaults);
-                const enabledSites = new Set(settings.enabledSites || []);
-                if (hostnameMatch(Array.from(enabledSites), hostname)) {
-                    enabledSites.delete(hostname);
-                } else {
-                    enabledSites.add(hostname);
-                }
-                await setSyncStorage({ enabledSites: Array.from(enabledSites) });
-                // Trigger full reload
-                chrome.tabs.sendMessage(tab.id, { action: 'fullReload', ...settings }, () => {});
-                const isNowEnabled = enabledSites.has(hostname);
-                try { chrome.action.setIcon({ tabId: tab.id, path: getIconPaths(isNowEnabled) }); } catch (e) { console.error(e); }
-            } catch (err) {
-                console.error('Toggle domain failed:', err);
-            }
-        }
+            if (info.menuItemId === 'rtl_toggle_current_domain') {
+                const settings = await getSyncStorage(DEFAULT_SETTINGS);
+                const enabledSites = toggleHostname(settings.enabledSites, hostname);
+                const nextSettings = { ...settings, enabledSites };
 
-        if (info.menuItemId === 'rtl_apply_reload') {
-            const settings = await getSyncStorage(defaults);
-            try {
-                chrome.tabs.sendMessage(tab.id, { action: 'fullReload', ...settings }, () => {});
-            } catch (err) {
-                console.error('Apply reload failed:', err);
-            }
-        }
+                await setSyncStorage({ enabledSites });
+                await requestContentReload(tab.id, nextSettings);
 
-        if (info.menuItemId === 'rtl_export_pdf') {
-            try {
-                // First, try to send message to existing content script
-                chrome.tabs.sendMessage(tab.id, { action: 'exportPdf' }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.log('Content script not available, attempting injection...');
-                        
-                        // Try to inject content script
-                        chrome.scripting.executeScript({
-                            target: { tabId: tab.id },
-                            files: ['content.js']
-                        }).then(() => {
-                            setTimeout(() => {
-                                chrome.tabs.sendMessage(tab.id, { action: 'exportPdf' }, (response) => {
-                                    if (chrome.runtime.lastError) {
-                                        console.log('Export via content script failed, using native print...');
-                                        chrome.scripting.executeScript({
-                                            target: { tabId: tab.id },
-                                            func: () => window.print()
-                                        });
-                                    }
-                                });
-                            }, 500);
-                        }).catch(injectionError => {
-                            console.error('Content script injection failed:', injectionError.message);
-                            console.log('Using native browser print as fallback...');
-                            // Direct native print fallback when injection fails
-                            chrome.scripting.executeScript({
-                                target: { tabId: tab.id },
-                                func: () => window.print()
-                            }).catch(printError => {
-                                console.error('All print methods failed:', printError);
-                                // Try alternative method for policy-restricted pages
-                                chrome.tabs.create({
-                                    url: `javascript:window.print()`
-                                });
-                            });
-                        });
-                    }
-                });
-            } catch (e) {
-                console.error('Export PDF failed:', e);
-                // Final fallback - try direct print
-                try {
-                    chrome.scripting.executeScript({
-                        target: { tabId: tab.id },
-                        func: () => window.print()
-                    });
-                } catch (printError) {
-                    console.error('Native print also failed:', printError);
-                    // Try opening a new tab with print dialog
-                    chrome.tabs.create({
-                        url: `javascript:window.print()`
-                    });
-                }
+                const isNowEnabled = hostnameMatch(enabledSites, hostname);
+                await chrome.action.setIcon({ tabId: tab.id, path: getIconPaths(isNowEnabled) });
+                return;
             }
+
+            if (info.menuItemId === 'rtl_apply_reload') {
+                const settings = await getSyncStorage(DEFAULT_SETTINGS);
+                await requestContentReload(tab.id, settings);
+                return;
+            }
+
+            if (info.menuItemId === 'rtl_export_pdf') {
+                await exportPdf(tab);
+            }
+        } catch (e) {
+            console.error('Context menu handler error:', e);
         }
-    } catch (e) {
-        console.error('Context menu handler error:', e);
-    }
-});
+    });
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === 'heartbeat') {
-        console.log('Heartbeat received from:', message.domain, 'Stats:', message.stats);
-        // Store or process stats
+    if (message?.action === 'heartbeat') {
+        const domain = typeof message.domain === 'string' ? message.domain : 'unknown';
         chrome.storage.local.set({
-            [`heartbeat_${message.domain}`]: {
-                timestamp: message.timestamp,
-                stats: message.stats
+            [`heartbeat_${domain}`]: {
+                timestamp: message.timestamp || Date.now(),
+                stats: message.stats || {}
             }
         });
-        // Set ON icon for the sender tab
-        try { if (sender && sender.tab && sender.tab.id) chrome.action.setIcon({ tabId: sender.tab.id, path: getIconPaths(true) }); } catch (e) { console.error(e); }
+
+        try {
+            if (sender?.tab?.id) chrome.action.setIcon({ tabId: sender.tab.id, path: getIconPaths(true) });
+        } catch (e) {
+            console.error(e);
+        }
+
         sendResponse({ success: true });
         return true;
     }
 
-    
-    return true;
+    sendResponse({ success: false, error: 'Unknown action' });
+    return false;
 });
 
 // --- Storage Change Handling ---
 chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === 'sync') {
-        console.log('Settings changed:', changes);
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             const tab = tabs && tabs[0];
-            if (tab && tab.id) debounceUpdateIcon(tab.id, tab.url || '');
+            if (tab?.id) debounceUpdateIcon(tab.id, tab.url || '');
         });
     }
 });
 
 // --- Clean up pending icon updates when tabs are closed ---
-chrome.tabs.onRemoved && chrome.tabs.onRemoved.addListener((tabId) => {
-    if (iconUpdateQueue[tabId]) {
-        clearTimeout(iconUpdateQueue[tabId]);
-        delete iconUpdateQueue[tabId];
-    }
-});
+if (chrome.tabs.onRemoved) {
+    chrome.tabs.onRemoved.addListener((tabId) => {
+        if (iconUpdateQueue[tabId]) {
+            clearTimeout(iconUpdateQueue[tabId]);
+            delete iconUpdateQueue[tabId];
+        }
+    });
+}
 
-chrome.tabs.onActivated && chrome.tabs.onActivated.addListener(async (activeInfo) => {
-    try {
-        const tab = await chrome.tabs.get(activeInfo.tabId);
-        debounceUpdateIcon(activeInfo.tabId, tab.url || '');
-    } catch (e) { console.error(e); }
-});
+if (chrome.tabs.onActivated) {
+    chrome.tabs.onActivated.addListener(async (activeInfo) => {
+        try {
+            const tab = await chrome.tabs.get(activeInfo.tabId);
+            debounceUpdateIcon(activeInfo.tabId, tab.url || '');
+        } catch (e) { console.error(e); }
+    });
+}
 
-chrome.tabs.onUpdated && chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete') {
-        debounceUpdateIcon(tabId, tab.url || '');
-    }
-});
+if (chrome.tabs.onUpdated) {
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+        if (changeInfo.status === 'complete') {
+            debounceUpdateIcon(tabId, tab.url || '');
+        }
+    });
+}
