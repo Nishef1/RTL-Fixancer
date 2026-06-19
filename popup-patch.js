@@ -37,6 +37,27 @@
         Object.defineProperty(manager.enabledSites, '__rtlFixancerHasPatched', { value: true });
     }
 
+    async function requestPrint(manager) {
+        try {
+            await manager.sendMessageToContent('exportPdf', {}, 5000);
+            manager.showSuccessMessage?.('در حال ساخت PDF...');
+            return;
+        } catch (_) {
+            // Fall through to safe native print fallback.
+        }
+
+        try {
+            await chrome.scripting.executeScript({
+                target: { tabId: manager.currentTab.id },
+                func: () => window.print()
+            });
+            manager.showSuccessMessage?.('پنجره پرینت باز شد...');
+        } catch (error) {
+            manager.logError?.('popup safe PDF fallback failed', error);
+            manager.showErrorMessage?.('امکان پرینت در این صفحه وجود ندارد');
+        }
+    }
+
     function patchManager(manager) {
         if (!manager) return false;
         patchEnabledSet(manager);
@@ -94,6 +115,22 @@
                 }
             }, true);
             toggle.__rtlFixancerTogglePatched = true;
+        }
+
+        const exportButton = manager.elements?.btnExportPdf;
+        if (exportButton && !exportButton.__rtlFixancerPdfPatched) {
+            exportButton.addEventListener('click', async (event) => {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+
+                try {
+                    exportButton.classList.add('loading');
+                    await requestPrint(manager);
+                } finally {
+                    setTimeout(() => exportButton.classList.remove('loading'), 1200);
+                }
+            }, true);
+            exportButton.__rtlFixancerPdfPatched = true;
         }
 
         manager.updateCurrentSiteDisplay();
