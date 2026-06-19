@@ -113,13 +113,26 @@ function hostnameMatch(enabledSites, hostname) {
     });
 }
 
+function findMatchedSite(enabledSites, hostname) {
+    if (!hostname || !Array.isArray(enabledSites)) return null;
+    const normalizedHostname = hostname.toLowerCase();
+    return enabledSites.find(site => {
+        if (typeof site !== 'string') return false;
+        const normalizedSite = site.toLowerCase();
+        return normalizedHostname === normalizedSite || normalizedHostname.endsWith('.' + normalizedSite);
+    }) || null;
+}
+
 function toggleHostname(enabledSites, hostname) {
     const sites = new Set(Array.isArray(enabledSites) ? enabledSites : []);
-    if (hostnameMatch(Array.from(sites), hostname)) {
-        sites.delete(hostname);
-    } else {
-        sites.add(hostname);
+    const matchedSite = findMatchedSite(Array.from(sites), hostname);
+
+    if (matchedSite) {
+        sites.delete(matchedSite);
+    } else if (hostname) {
+        sites.add(hostname.toLowerCase());
     }
+
     return Array.from(sites).sort();
 }
 
@@ -203,7 +216,7 @@ async function requestContentReload(tabId, settings) {
     let result = await sendMessageToTab(tabId, message);
     if (result.ok) return result;
 
-    const injection = await executeScriptSafely(tabId, { files: ['content.js'] });
+    const injection = await executeScriptSafely(tabId, { files: ['content.js', 'content-patch.js'] });
     if (!injection.ok) return injection;
 
     await new Promise(resolve => setTimeout(resolve, 250));
@@ -219,7 +232,7 @@ async function exportPdf(tab) {
     let result = await sendMessageToTab(tab.id, { action: 'exportPdf' });
     if (result.ok) return;
 
-    const injection = await executeScriptSafely(tab.id, { files: ['content.js'] });
+    const injection = await executeScriptSafely(tab.id, { files: ['content.js', 'content-patch.js'] });
     if (injection.ok) {
         await new Promise(resolve => setTimeout(resolve, 500));
         result = await sendMessageToTab(tab.id, { action: 'exportPdf' });
