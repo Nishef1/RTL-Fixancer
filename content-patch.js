@@ -25,7 +25,8 @@
     }
 
     function patchManager(manager) {
-        if (!manager || manager[PATCH_FLAG]) return false;
+        if (!manager) return false;
+        if (manager[PATCH_FLAG]) return true;
 
         manager[PATCH_FLAG] = true;
         manager.domainMatches = domainMatches;
