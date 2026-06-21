@@ -17,6 +17,17 @@
             sites: '📋 Sites',
             emptySites: 'No sites added yet',
             help: 'Changes are applied immediately.',
+            currentSiteUnknown: 'Restricted or unknown site',
+            statusPrefix: 'Status:',
+            statusMap: {
+                'در حال اتصال...': 'Connecting...',
+                'قطع - سایت غیرفعال': 'Disconnected - site disabled',
+                'قطع - دامنه نامشخص': 'Disconnected - unknown domain',
+                'قطع - خطای اتصال': 'Disconnected - connection error',
+                'صفحه محافظت شده': 'Protected page',
+                'محدود شده توسط سیاست مرورگر': 'Restricted by browser policy',
+                'متصل ✓': 'Connected ✓'
+            },
             fonts: {
                 vazir: 'Vazir',
                 shabnam: 'Shabnam',
@@ -48,6 +59,9 @@
             sites: '📋 سایتها',
             emptySites: 'هیچ سایتی اضافه نشده',
             help: 'با تغییر تنظیمات، نتایج بلافاصله اعمال می‌شود.',
+            currentSiteUnknown: 'سایت محدود یا نامعلوم',
+            statusPrefix: 'وضعیت:',
+            statusMap: {},
             fonts: {
                 vazir: 'وزیر',
                 shabnam: 'شبنم',
@@ -80,6 +94,42 @@
         });
     }
 
+    function translateStatusText(text, copy) {
+        if (typeof text !== 'string' || !copy?.statusMap) return text;
+        const raw = text.replace(/^وضعیت:\s*/, '').replace(/^Status:\s*/, '').trim();
+        const translated = copy.statusMap[raw];
+        return translated ? `${copy.statusPrefix} ${translated}` : text;
+    }
+
+    function translateDynamicText(copy) {
+        const status = document.getElementById('status');
+        if (status) {
+            const translated = translateStatusText(status.textContent, copy);
+            if (translated !== status.textContent) status.textContent = translated;
+        }
+
+        document.querySelectorAll('.empty-sites').forEach(element => {
+            if (element.textContent.trim() === 'هیچ سایتی اضافه نشده') {
+                element.textContent = copy.emptySites;
+            }
+        });
+
+        const currentSite = document.getElementById('currentSiteUrl');
+        if (currentSite && currentSite.textContent.trim() === 'سایت محدود یا نامعلوم') {
+            currentSite.textContent = copy.currentSiteUnknown;
+        }
+    }
+
+    function observeDynamicText(copy) {
+        if (window.__rtlFixancerI18nObserver) return;
+        window.__rtlFixancerI18nObserver = new MutationObserver(() => translateDynamicText(copy));
+        window.__rtlFixancerI18nObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+    }
+
     function applyLanguage(languageCode = DEFAULT_LANGUAGE) {
         const lang = translations[languageCode] ? languageCode : DEFAULT_LANGUAGE;
         const copy = translations[lang];
@@ -103,6 +153,8 @@
         setSelectLabels('fontSelect', copy.fonts);
         setSelectLabels('fontSizeSelect', copy.sizes);
         setSelectLabels('detectionMode', copy.modes);
+        translateDynamicText(copy);
+        observeDynamicText(copy);
     }
 
     async function init() {
