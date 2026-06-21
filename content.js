@@ -736,7 +736,7 @@ class RTLAIStudioManager {
                         '.prose', '.answer', '[data-testid="answer"]', '[data-cplx-component="message-block-answer"]',
                         '.max-w-threadContentWidth', '.group\\/query',
                         // ChatGPT
-                        '[data-testid="conversation-turn"]', '[data-message-author-role]', '.markdown', '[data-testid="markdown"]',
+                        '[data-testid^="conversation-turn"]', '[data-message-author-role]', '.markdown', '[data-testid="markdown"]',
                         // عمومی
                         '[role="main"]', 'main'
                     ];
@@ -1194,7 +1194,7 @@ class RTLAIStudioManager {
                 logName: 'Perplexity'
             },
             'ChatGPT': {
-                selectors: '[data-testid="conversation-turn"] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
+                selectors: '[data-testid^="conversation-turn"] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
                            '[data-message-author-role] :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text]), ' +
                            '.markdown :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])',
                 maxRecheck: 70,
@@ -1389,7 +1389,7 @@ class RTLAIStudioManager {
     // پردازش عناصر ویژه ChatGPT
     processChatGPTSpecialElements() {
         const chatTargets = document.querySelectorAll(
-            buildContainerSelector(['[data-testid="conversation-turn"]:not([data-ai-rtl-processed])', '[data-message-author-role]:not([data-ai-rtl-processed])', '.markdown:not([data-ai-rtl-processed])'])
+            buildContainerSelector(['[data-testid^="conversation-turn"]:not([data-ai-rtl-processed])', '[data-message-author-role]:not([data-ai-rtl-processed])', '.markdown:not([data-ai-rtl-processed])'])
         );
 
         chatTargets.forEach(element => {
@@ -1397,7 +1397,7 @@ class RTLAIStudioManager {
             if (text && this.hasAnyPersianChar(text)) {
                 this.processElement(element);
                 if (this.processedElements.has(element)) {
-                    const container = element.closest('[data-testid="conversation-turn"], [data-message-author-role], .markdown');
+                    const container = element.closest('[data-testid^="conversation-turn"], [data-message-author-role], .markdown');
                     if (container) container.setAttribute('data-ai-rtl-processed', 'true');
                 }
             }
