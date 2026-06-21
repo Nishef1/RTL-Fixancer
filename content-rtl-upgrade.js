@@ -77,9 +77,14 @@
     }
 
     function cleanupStructuralMistakes(manager) {
-        const upgraded = Array.from(document.querySelectorAll('[data-rtl-fixancer-rtl-text], [data-ai-rtl-persian-text]'));
+        const upgraded = Array.from(document.querySelectorAll('[data-rtl-fixancer-rtl-text]'));
         for (const element of upgraded) {
             if (isStructuralContainer(element) || !hasDirectRtlText(element)) clearWrongUpgrade(manager, element);
+        }
+
+        const legacyUpgraded = Array.from(document.querySelectorAll('[data-ai-rtl-persian-text]'));
+        for (const element of legacyUpgraded) {
+            if (isStructuralContainer(element)) clearWrongUpgrade(manager, element);
         }
     }
 
