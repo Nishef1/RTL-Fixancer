@@ -1,4 +1,3 @@
-// --- Utility Promise Wrappers ---
 const DEFAULT_SETTINGS = {
     isEnabled: true,
     selectedFont: 'vazir',
@@ -13,7 +12,9 @@ const CONTENT_SCRIPT_FILES = [
     'languages/arabic.js',
     'languages/hebrew.js',
     'content.js',
-    'content-patch.js'
+    'content-patch.js',
+    'content-rtl-upgrade.js',
+    'content-ui-guard.js'
 ];
 
 function getSyncStorage(defaults = DEFAULT_SETTINGS) {
@@ -52,7 +53,6 @@ function getHostname(tabUrl) {
     }
 }
 
-// --- Context Menu Creation ---
 let contextMenusCreating = false;
 let contextMenusTimeout = null;
 
@@ -63,23 +63,19 @@ function createContextMenus() {
     contextMenusTimeout = setTimeout(() => { contextMenusCreating = false; }, 5000);
 
     chrome.contextMenus.removeAll(() => {
-        if (chrome.runtime.lastError) {
-            console.warn('removeAll failed:', chrome.runtime.lastError.message);
-        }
+        if (chrome.runtime.lastError) console.warn('removeAll failed:', chrome.runtime.lastError.message);
 
         const menus = [
             { id: 'rtl_parent', title: 'RTL Fixancer', contexts: ['all'] },
             { id: 'rtl_toggle_current_domain', parentId: 'rtl_parent', title: 'Toggle current domain', contexts: ['all'] },
             { id: 'rtl_apply_reload', parentId: 'rtl_parent', title: 'Re-apply on this page', contexts: ['all'] },
-            { id: 'rtl_export_pdf', parentId: 'rtl_parent', title: '⬇️ Export page text to PDF', contexts: ['all'] }
+            { id: 'rtl_export_pdf', parentId: 'rtl_parent', title: 'Export page text to PDF', contexts: ['all'] }
         ];
 
         let created = 0;
         menus.forEach(menu => {
             chrome.contextMenus.create(menu, () => {
-                if (chrome.runtime.lastError) {
-                    console.warn('create failed for', menu.id, ':', chrome.runtime.lastError.message);
-                }
+                if (chrome.runtime.lastError) console.warn('create failed for', menu.id, ':', chrome.runtime.lastError.message);
                 created++;
                 if (created === menus.length) {
                     clearTimeout(contextMenusTimeout);
@@ -90,7 +86,6 @@ function createContextMenus() {
     });
 }
 
-// --- Subdomain Matching ---
 function hostnameMatch(enabledSites, hostname) {
     if (!hostname || !Array.isArray(enabledSites)) return false;
     const normalizedHostname = hostname.toLowerCase();
@@ -114,17 +109,11 @@ function findMatchedSite(enabledSites, hostname) {
 function toggleHostname(enabledSites, hostname) {
     const sites = new Set(Array.isArray(enabledSites) ? enabledSites : []);
     const matchedSite = findMatchedSite(Array.from(sites), hostname);
-
-    if (matchedSite) {
-        sites.delete(matchedSite);
-    } else if (hostname) {
-        sites.add(hostname.toLowerCase());
-    }
-
+    if (matchedSite) sites.delete(matchedSite);
+    else if (hostname) sites.add(hostname.toLowerCase());
     return Array.from(sites).sort();
 }
 
-// --- Icon Paths Utility ---
 function getIconPaths(isOn) {
     if (isOn) {
         return {
@@ -142,7 +131,6 @@ function getIconPaths(isOn) {
     };
 }
 
-// --- Debounced Icon Update ---
 const iconUpdateQueue = {};
 function debounceUpdateIcon(tabId, url) {
     clearTimeout(iconUpdateQueue[tabId]);
@@ -152,19 +140,16 @@ function debounceUpdateIcon(tabId, url) {
     }, 150);
 }
 
-// --- Update Icon Based On State ---
 async function updateIconForTab(tabId, tabUrl) {
     try {
         if (!tabUrl) {
             const tab = await chrome.tabs.get(tabId).catch(() => null);
             tabUrl = tab?.url || '';
         }
-
         if (!isInjectableUrl(tabUrl)) {
             await chrome.action.setIcon({ tabId, path: getIconPaths(false) });
             return;
         }
-
         const hostname = getHostname(tabUrl);
         const settings = await getSyncStorage(DEFAULT_SETTINGS);
         const enabled = hostnameMatch(settings.enabledSites, hostname);
@@ -203,38 +188,27 @@ async function requestContentReload(tabId, settings) {
     const message = { action: 'fullReload', ...settings };
     let result = await sendMessageToTab(tabId, message);
     if (result.ok) return result;
-
     const injection = await executeScriptSafely(tabId, { files: CONTENT_SCRIPT_FILES });
     if (!injection.ok) return injection;
-
     await new Promise(resolve => setTimeout(resolve, 250));
     return sendMessageToTab(tabId, message);
 }
 
 async function exportPdf(tab) {
-    if (!tab?.id || !isInjectableUrl(tab.url)) {
-        console.warn('Export skipped: unsupported tab URL');
-        return;
-    }
-
+    if (!tab?.id || !isInjectableUrl(tab.url)) return;
     let result = await sendMessageToTab(tab.id, { action: 'exportPdf' });
     if (result.ok) return;
-
     const injection = await executeScriptSafely(tab.id, { files: CONTENT_SCRIPT_FILES });
     if (injection.ok) {
         await new Promise(resolve => setTimeout(resolve, 500));
         result = await sendMessageToTab(tab.id, { action: 'exportPdf' });
         if (result.ok) return;
     }
-
     const printFallback = await executeScriptSafely(tab.id, { func: () => window.print() });
-    if (!printFallback.ok) {
-        console.error('Export PDF failed:', result.error || injection.error || printFallback.error);
-    }
+    if (!printFallback.ok) console.error('Export PDF failed:', result.error || injection.error || printFallback.error);
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-    console.log('RTL Fixancer installed/updated');
     createContextMenus();
     try { chrome.action.setIcon({ path: getIconPaths(false) }); } catch (e) { console.error(e); }
 });
@@ -252,29 +226,22 @@ if (chrome.contextMenus) {
             if (!tab?.id || !isInjectableUrl(tab.url)) return;
             const hostname = getHostname(tab.url);
             if (!hostname) return;
-
             if (info.menuItemId === 'rtl_toggle_current_domain') {
                 const settings = await getSyncStorage(DEFAULT_SETTINGS);
                 const enabledSites = toggleHostname(settings.enabledSites, hostname);
                 const nextSettings = { ...settings, enabledSites };
-
                 await setSyncStorage({ enabledSites });
                 await requestContentReload(tab.id, nextSettings);
-
                 const isNowEnabled = hostnameMatch(enabledSites, hostname);
                 await chrome.action.setIcon({ tabId: tab.id, path: getIconPaths(isNowEnabled) });
                 return;
             }
-
             if (info.menuItemId === 'rtl_apply_reload') {
                 const settings = await getSyncStorage(DEFAULT_SETTINGS);
                 await requestContentReload(tab.id, settings);
                 return;
             }
-
-            if (info.menuItemId === 'rtl_export_pdf') {
-                await exportPdf(tab);
-            }
+            if (info.menuItemId === 'rtl_export_pdf') await exportPdf(tab);
         } catch (e) {
             console.error('Context menu handler error:', e);
         }
@@ -290,22 +257,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 stats: message.stats || {}
             }
         });
-
         try {
             if (sender?.tab?.id) chrome.action.setIcon({ tabId: sender.tab.id, path: getIconPaths(true) });
         } catch (e) {
             console.error(e);
         }
-
         sendResponse({ success: true });
         return true;
     }
-
     sendResponse({ success: false, error: 'Unknown action' });
     return false;
 });
 
-// --- Storage Change Handling ---
 chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === 'sync') {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -315,7 +278,6 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     }
 });
 
-// --- Clean up pending icon updates when tabs are closed ---
 if (chrome.tabs.onRemoved) {
     chrome.tabs.onRemoved.addListener((tabId) => {
         if (iconUpdateQueue[tabId]) {
@@ -336,8 +298,6 @@ if (chrome.tabs.onActivated) {
 
 if (chrome.tabs.onUpdated) {
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-        if (changeInfo.status === 'complete') {
-            debounceUpdateIcon(tabId, tab.url || '');
-        }
+        if (changeInfo.status === 'complete') debounceUpdateIcon(tabId, tab.url || '');
     });
 }
