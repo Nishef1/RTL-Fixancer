@@ -63,6 +63,9 @@
     function upgradeMisclassifiedPersian(manager) {
         if (!manager?.config?.isEnabled || !manager.isSiteEnabled?.()) return;
 
+        // Skip during active streaming bursts to avoid flip-flopping state
+        if (manager._isStreaming) return;
+
         const candidates = Array.from(document.querySelectorAll('[data-ai-rtl-english-text]:not([data-ai-rtl-persian-text])'));
         let upgraded = 0;
         for (const element of candidates) {
@@ -92,6 +95,9 @@
         run();
         if (!manager[MISCLASSIFICATION_TIMER_FLAG]) {
             manager[MISCLASSIFICATION_TIMER_FLAG] = setInterval(run, 1500);
+            // Register for cleanup so content.js cleanup() can clear this timer
+            if (!window.__rtlFixancerManagedTimers) window.__rtlFixancerManagedTimers = [];
+            window.__rtlFixancerManagedTimers.push(manager[MISCLASSIFICATION_TIMER_FLAG]);
         }
     }
 

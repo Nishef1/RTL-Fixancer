@@ -49,29 +49,27 @@
         return common?.hasRtlText ? common.hasRtlText(text) : RTL_RE.test(text);
     }
 
+    function getPrimaryLanguage(element) {
+        try {
+            const text = directText(element);
+            if (!text) return null;
+            const common = window.RTLFixancerCommon;
+            return common?.detectPrimaryLanguage ? common.detectPrimaryLanguage(text) : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function isPersianElement(element) {
+        return getPrimaryLanguage(element)?.code === 'fa';
+    }
+
     function isChatGPTManagedArea(manager, element) {
         try {
             return !!(manager?.isChatGPT && element?.closest?.(CHATGPT_MAIN_SELECTOR));
         } catch (_) {
             return false;
         }
-    }
-
-    function clearLegacyState(manager, element) {
-        try { element.removeAttribute('data-ai-rtl-english-text'); } catch (_) {}
-        try { element.removeAttribute('data-ai-rtl-persian-text'); } catch (_) {}
-        try { element.removeAttribute('data-ai-rtl-processed'); } catch (_) {}
-        try { manager.processedElements?.delete?.(element); } catch (_) {}
-        try { manager.stableElements?.delete?.(element); } catch (_) {}
-        try {
-            const text = typeof manager?.getCleanText === 'function' ? manager.getCleanText(element) : (element.textContent || '').trim();
-            if (typeof manager?.generateElementSignature === 'function') {
-                manager.processedTextCache?.delete?.(manager.generateElementSignature(element, text));
-            }
-            if (typeof manager?.getElementSignature === 'function') {
-                manager.elementSignatureCache?.delete?.(manager.getElementSignature(element));
-            }
-        } catch (_) {}
     }
 
     function clearLegacyEnglishState(manager, element) {
@@ -90,8 +88,7 @@
         } catch (_) {}
     }
 
-    function clearWrongUpgrade(manager, element) {
-        clearLegacyState(manager, element);
+    function clearWrongUpgrade(_manager, element) {
         try { element.removeAttribute('data-rtl-fixancer-rtl-text'); } catch (_) {}
         try { element.removeAttribute('data-rtl-fixancer-language'); } catch (_) {}
         try { element.removeAttribute('dir'); } catch (_) {}
@@ -104,43 +101,47 @@
     function cleanupStructuralMistakes(manager) {
         const upgraded = Array.from(document.querySelectorAll('[data-rtl-fixancer-rtl-text]'));
         for (const element of upgraded) {
-            if (isChatGPTManagedArea(manager, element)) {
-                clearWrongUpgrade(manager, element);
+            // Elements now owned by content.js Persian processing: remove stale
+            // upgrade-module attributes so they don't confuse debugging or future
+            // selectors that don't exclude data-ai-rtl-persian-text.
+            if (element.hasAttribute('data-ai-rtl-persian-text')) {
+                try { element.removeAttribute('data-rtl-fixancer-rtl-text'); } catch (_) {}
+                try { element.removeAttribute('data-rtl-fixancer-language'); } catch (_) {}
                 continue;
             }
-            if (isStructuralContainer(element) || !hasDirectRtlText(element)) clearWrongUpgrade(manager, element);
-        }
-
-        const legacyUpgraded = Array.from(document.querySelectorAll('[data-ai-rtl-persian-text]'));
-        for (const element of legacyUpgraded) {
-            if (isStructuralContainer(element)) clearWrongUpgrade(manager, element);
+            // In ChatGPT areas, only clear structural containers or elements that
+            // no longer have RTL text — don't blindly clear all upgraded elements
+            // (that would cause a 1500ms font flicker for Arabic/Hebrew).
+            if (isChatGPTManagedArea(manager, element)) {
+                if (isStructuralContainer(element) || !hasDirectRtlText(element)) {
+                    clearWrongUpgrade(manager, element);
+                }
+                continue;
+            }
+            if (isPersianElement(element) || isStructuralContainer(element) || !hasDirectRtlText(element)) {
+                clearWrongUpgrade(manager, element);
+            }
         }
     }
 
     function applyTypography(manager, element) {
         const text = directText(element);
         const common = window.RTLFixancerCommon;
-        const applied = common?.applyRtlTypography?.(element, { text });
-        const configuredFont = typeof manager?.getFontFamily === 'function' ? manager.getFontFamily() : null;
-        if (applied) {
-            if (configuredFont) {
-                try { element.style.fontFamily = configuredFont; } catch (_) {}
-            }
-            return true;
-        }
+        const language = getPrimaryLanguage(element);
+        if (language?.code === 'fa') return false;
+        if (common?.applyRtlTypography?.(element, { text, language })) return true;
         try { element.setAttribute('dir', 'rtl'); } catch (_) {}
         try { element.setAttribute('data-rtl-fixancer-rtl-text', 'true'); } catch (_) {}
         try { element.style.direction = 'rtl'; } catch (_) {}
         try { element.style.textAlign = 'right'; } catch (_) {}
         try { element.style.unicodeBidi = 'plaintext'; } catch (_) {}
-        if (configuredFont) {
-            try { element.style.fontFamily = configuredFont; } catch (_) {}
-        }
         return true;
     }
 
     function run(manager) {
         if (!isEnabled(manager)) return;
+        // Skip during streaming bursts to avoid redundant work
+        if (manager._isStreaming) return;
         cleanupStructuralMistakes(manager);
 
         const selector = [
@@ -152,8 +153,14 @@
         let upgraded = 0;
         for (const element of candidates) {
             if (upgraded >= 150) break;
+            // Never touch elements managed by content.js Persian processing
+            if (element.hasAttribute('data-ai-rtl-persian-text')) continue;
             if (isChatGPTManagedArea(manager, element)) continue;
             if (!hasDirectRtlText(element)) continue;
+            if (isPersianElement(element)) {
+                clearWrongUpgrade(manager, element);
+                continue;
+            }
             if (element.hasAttribute('data-ai-rtl-english-text')) {
                 clearLegacyEnglishState(manager, element);
             }
@@ -172,6 +179,9 @@
             }
         };
         manager[TIMER_KEY] = setInterval(tick, 1500);
+        // Register for cleanup so content.js cleanup() can clear this timer
+        if (!window.__rtlFixancerManagedTimers) window.__rtlFixancerManagedTimers = [];
+        window.__rtlFixancerManagedTimers.push(manager[TIMER_KEY]);
         tick();
     }
 

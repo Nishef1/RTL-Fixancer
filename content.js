@@ -700,6 +700,19 @@ class RTLAIStudioManager {
         
         this.observer = new MutationObserver((mutations) => {
             this.lastMutationTime = Date.now();
+
+            // Detect active streaming: if we get rapid characterData mutations,
+            // skip reprocessing elements that already have a stable classification.
+            // This prevents font thrashing on ChatGPT.
+            const now = Date.now();
+            if (this._lastStreamingBurst && (now - this._lastStreamingBurst) < 300) {
+                this._isStreaming = true;
+            } else {
+                this._isStreaming = false;
+            }
+            if (mutations.some(m => m.type === 'characterData')) {
+                this._lastStreamingBurst = now;
+            }
             
             const relevantMutations = mutations.filter(mutation => {
                 if (mutation.type === 'childList') {
@@ -713,6 +726,9 @@ class RTLAIStudioManager {
                     const targetNode = mutation.target;
                     const el = targetNode.nodeType === Node.TEXT_NODE ? targetNode.parentElement : targetNode;
                     if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+                    // Skip code/pre elements — their text changes during ChatGPT streaming
+                    // but they should never get RTL processing.
+                    if (el.closest('code, pre, [class*="language-"], .highlight')) return false;
                     const chatSelectors = [
                         // AI Studio
                         '.conversation-container', '.chat-message', '.model-response', '.message-content',
@@ -1052,6 +1068,9 @@ class RTLAIStudioManager {
                 // برای تغییرات متن موجود در سایت‌های چت
                 const node = mutation.target;
                 const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+                // During streaming bursts, skip elements already classified as Persian
+                // to prevent font thrashing from repeated detection re-runs.
+                if (this._isStreaming && el?.hasAttribute?.('data-ai-rtl-persian-text')) return;
                 if (el && el.nodeType === Node.ELEMENT_NODE && this.isSafeElementForProcessing(el) && !this.stableElements.has(el)) {
                     elementsToProcess.add(el);
                     // والد نزدیک پیام را هم در نظر بگیر
@@ -1340,7 +1359,8 @@ class RTLAIStudioManager {
 
             // فونت را بررسی کن
             const expectedFont = this.getFontFamily();
-            if (expectedFont && !computedStyle.fontFamily.includes('Vazir') && !computedStyle.fontFamily.includes('Shabnam')) {
+            const family = computedStyle.fontFamily;
+            if (expectedFont && !family.includes('VazirAIStudio') && !family.includes('ShabnamAIStudio') && !family.includes('Vazir') && !family.includes('Shabnam')) {
                 element.style.setProperty('font-family', expectedFont, 'important');
             }
 
@@ -1539,6 +1559,13 @@ class RTLAIStudioManager {
 
             // بررسی کش قبل از پردازش
             if (this.isElementAlreadyProcessed(element, text)) {
+                return;
+            }
+
+            // Promote-only: once marked Persian, never downgrade to English.
+            // This prevents font thrashing during ChatGPT streaming where
+            // partial text may temporarily fall below the detection threshold.
+            if (element.hasAttribute('data-ai-rtl-persian-text')) {
                 return;
             }
 
@@ -2217,7 +2244,19 @@ class RTLAIStudioManager {
         
         // Clear all timers managed by the timers Map (consolidated via DRY refactor)
         this.clearAllTimers();
-        
+
+        // Clear externally-registered timers from upgrade/patch/ui-guard modules
+        if (window.__rtlFixancerManagedTimers) {
+            window.__rtlFixancerManagedTimers.forEach(id => {
+                clearInterval(id);
+                // Clear module-level timer flags so re-enable creates fresh timers
+                if (this.__rtlFixancerGenericUpgradeTimer === id) delete this.__rtlFixancerGenericUpgradeTimer;
+                if (this.__rtlFixancerPersianUpgradeTimer === id) delete this.__rtlFixancerPersianUpgradeTimer;
+                if (window.__rtlFixancerUiGuardTimer === id) delete window.__rtlFixancerUiGuardTimer;
+            });
+            window.__rtlFixancerManagedTimers = [];
+        }
+
         // پاک کردن aiStudioMutationObserver
         if (this.aiStudioMutationObserver) {
             this.aiStudioMutationObserver.disconnect();

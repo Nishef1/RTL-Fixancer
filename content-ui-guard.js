@@ -70,11 +70,16 @@
     }
 
     function run() {
+        // Skip during streaming bursts to avoid redundant style writes
+        const manager = window.rtlManagerAIStudio;
+        if (manager?._isStreaming) return;
         const candidates = Array.from(document.querySelectorAll(UI_SELECTOR));
         let guarded = 0;
         for (const element of candidates) {
             if (guarded >= 250) break;
             if (!looksLikeHostUi(element)) continue;
+            // Never touch elements owned by content.js Persian processing
+            if (element.hasAttribute('data-ai-rtl-persian-text')) continue;
             protect(element);
             guarded++;
         }
@@ -90,6 +95,9 @@
             }
         };
         window[TIMER_KEY] = setInterval(tick, 1200);
+        // Register for cleanup so content.js cleanup() can clear this timer
+        if (!window.__rtlFixancerManagedTimers) window.__rtlFixancerManagedTimers = [];
+        window.__rtlFixancerManagedTimers.push(window[TIMER_KEY]);
         tick();
     }
 
