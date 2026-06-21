@@ -1,85 +1,120 @@
 ## RTL Fixancer
 
-Improve and right-align Persian (Farsi) text across the web. RTL Fixancer is a Chrome Extension that detects language per element, switches direction and alignment (RTL/LTR), and applies clean Persian fonts. It works on **all websites** and is optimized for AI chat UIs. Can export chats/pages to PDF while preserving fonts and layout.
+Smart RTL typography enhancement for Chrome. RTL Fixancer detects right-to-left text per element, fixes direction/alignment, applies readable fonts, and keeps mixed English + RTL content usable across modern web apps.
 
-![RTL Fixancer Popup Interface](images/Interface.png)
+![RTL Fixancer English Popup](images/popup-english.svg)
+
+[فارسی / Persian README](README.fa.md)
 
 ### Highlights
-- **Works everywhere**: Enable on any website with one click. No site-specific configuration needed.
-- **Smart detection**: Per-element language detection (Persian vs English) with adjustable sensitivity.
-- **Automatic direction**: Applies `direction` and alignment (RTL/LTR) with `unicode-bidi: isolate` for mixed text.
-- **Beautiful Persian fonts**: Ships WOFF2 versions of Vazir/Shabnam for fast loading; applied only to detected Persian content.
-- **AI chat optimized**: Enhanced handling for Perplexity, Google AI Studio, ChatGPT, and DeepSeek.
-- **One-click PDF**: Export chat content (or full page) to a print-ready view that preserves fonts, RTL/LTR, and page breaks.
-- **SPA aware**: Watches pushState/replaceState/popstate/hashchange and re-applies on route changes.
-- **Fast and safe**: Uses MutationObserver + `requestIdleCallback` for non-urgent work; skips code blocks and structural containers.
-- **Modern JavaScript**: Built with 2026 patterns — `AbortController` for automatic event cleanup, `requestIdleCallback` for idle-time processing, `[...spread]` operators, and `structuredClone()` for deep comparisons.
-- **Per-site enable**: Toggle the current site right from the popup or context menu; changes apply instantly.
+
+- **Multilingual RTL support**: Persian/Farsi, Arabic, and Hebrew are registered through separate language modules.
+- **Shared language engine**: `rtl-common.js` provides reusable detection and typography helpers so language configs stay small and duplicated logic is avoided.
+- **English popup UI by default**: The extension popup now opens in English by default, with UI text centralized in `ui-i18n.js`.
+- **Works everywhere**: Enable the current site from the popup or context menu. Core text enhancement works on any normal `http`/`https` page.
+- **AI chat optimized**: Improved handling for ChatGPT, Perplexity, Google AI Studio, Gemini, DeepSeek, and similar chat interfaces.
+- **Mixed text friendly**: Handles English + RTL paragraphs, lists, and dynamically generated content without forcing code blocks or protected structural UI.
+- **Font-aware**: Uses bundled Vazir/Shabnam for Persian and system fallback stacks suitable for Arabic and Hebrew.
+- **One-click PDF**: Use the popup or context menu to open a print-ready view and save content as PDF.
+- **MV3 hardening**: Uses Manifest V3, avoids broad `host_permissions`, and guards scripting actions to supported tab URLs.
+
+### Supported RTL languages
+
+| Language | Module | Notes |
+| --- | --- | --- |
+| Persian / Farsi | `rtl-common.js` | Uses Vazir/Shabnam and Persian-specific detection helpers. |
+| Arabic | `languages/arabic.js` | Uses Arabic-friendly system font fallbacks. |
+| Hebrew | `languages/hebrew.js` | Uses Hebrew Unicode ranges and Hebrew-friendly font fallbacks. |
 
 ### Works on all websites
-RTL Fixancer works on **any website** you visit. Simply enable it for the current site using the popup toggle or right-click context menu. While it has enhanced support for AI chat platforms, the core RTL detection and font styling works universally.
 
-**Enhanced support for:**
+RTL Fixancer works on any normal website you visit. Enable it for the current site using the popup toggle or the right-click context menu. The extension is especially useful for AI chat UIs where Persian, Arabic, Hebrew, and English often appear in the same answer.
+
+Enhanced support is targeted for:
+
+- `chat.openai.com` / `chatgpt.com`
 - `perplexity.ai`
 - `aistudio.google.com` / `makersuite.google.com`
-- `chat.openai.com` / `chatgpt.com`
-- `deepseek.com`
 - `gemini.google.com`
-- And any other website with Persian/Farsi text!
+- `deepseek.com`
+- Any other website with RTL text
 
 ## Install
 
 ### Chrome Web Store
+
 Coming soon.
 
-### Manual (developer) install
-1) Download or clone this repository.
-2) Open Chrome and go to `chrome://extensions`.
-3) Enable "Developer mode".
-4) Click "Load unpacked" and select the extension folder (the repo root that contains `manifest.json`).
-5) Pin the extension and open a supported site. Use the popup to enable the current site and configure fonts/sensitivity.
+### Manual developer install
+
+1. Download or clone this repository.
+2. Open Chrome and go to `chrome://extensions`.
+3. Enable **Developer mode**.
+4. Click **Load unpacked** and select the repository root folder that contains `manifest.json`.
+5. Pin the extension, open a website, and enable that site from the popup.
 
 ## Usage
-- Use the popup to toggle the current site, pick a font (Vazir/Shabnam/Default), and set detection sensitivity.
-- Click "PDF" in the popup to export chat or page content to a print window. Use the browser print dialog to save as PDF.
-- Right-click context menu provides quick actions (toggle site, re-apply, export PDF).
+
+- Toggle the current site from the popup.
+- Pick a font: `Vazir`, `Shabnam`, or browser default.
+- Adjust detection sensitivity.
+- Click **PDF** to use the browser print dialog and save the page/chat as a PDF.
+- Use the right-click context menu for quick actions: toggle site, re-apply, export PDF.
 
 ## Permissions
-- `storage` for saving settings (font, size, detection mode, enabled sites).
-- `activeTab`, `scripting`, `tabs`, `contextMenus` for injecting the content script, capturing visible tab during full-page export, and context menu actions.
-- `host_permissions: <all_urls>` so text can be fixed across sites (actual behavior is per-site toggled by you).
+
+- `storage`: saves settings such as font, size, detection mode, UI language, and enabled sites.
+- `activeTab`, `scripting`: run the content script only for supported user-triggered actions.
+- `tabs`, `contextMenus`: update extension icon state and provide right-click actions.
+
+The manifest does **not** request broad `host_permissions`. The content script still runs on matched pages, but the extension behavior is controlled by the sites you enable.
 
 ## Privacy
-- No analytics. No external servers. All processing happens locally in your browser.
-- Fonts are bundled (WOFF2) and loaded from the extension package, not the network.
-- PDF export uses the system print dialog; if needed, full-page capture uses `chrome.tabs.captureVisibleTab` locally.
 
-## Development
-- Manifest V3, content script injected at `document_start`.
-- MutationObserver + `requestIdleCallback` for idle-time processing of late content.
-- SPA route watcher via history hooks and events.
-- Site-specific selectors to avoid changing headers/sidebars on complex UIs.
-- `AbortController` for automatic event listener cleanup on teardown.
-- Block vs inline element CSS separation to prevent text wrapping issues.
+- No analytics.
+- No external servers.
+- No user text is sent anywhere.
+- Processing happens locally in your browser.
+- Bundled fonts are loaded from the extension package, not from the network.
+- PDF export uses the browser/system print dialog.
 
 ## Architecture
-- **Content script** (`content.js`): Core RTL detection engine with `RTLAIStudioManager` class.
-- **Background service worker** (`background.js`): Context menus, icon management, PDF export.
-- **Popup** (`popup.html` + `popup.js`): Settings UI with site toggle, font/sensitivity controls.
-- **Print helper** (`lib/print-helper.js`): PDF export support.
 
-## Roadmap (ideas)
-- More site profiles (e.g., other chat/work apps).
-- Keyboard shortcuts for Toggle/Export.
-- Optional on-page highlight of processed elements for debugging.
+- **Shared RTL helpers**: `rtl-common.js`
+- **Language modules**: `languages/arabic.js`, `languages/hebrew.js`
+- **Core content engine**: `content.js`
+- **Compatibility patches**: `content-patch.js`, `content-rtl-upgrade.js`
+- **Background service worker**: `background.js`
+- **Popup UI**: `popup.html`, `popup.js`, `popup-patch.js`
+- **UI translations**: `ui-i18n.js`
+- **PDF helper**: `lib/print-helper.js`
+
+## Development notes
+
+- Manifest V3 extension.
+- Content scripts run at `document_start`.
+- Uses `MutationObserver` and `requestIdleCallback` for late/dynamic content.
+- Skips code/pre/input/textarea zones to avoid damaging code blocks and editable controls.
+- Site activation is subdomain-aware.
+- Popup UI language defaults to English via `ui-i18n.js`.
+
+## Roadmap
+
+- Optional UI language switcher inside the popup.
+- More site-specific profiles for complex productivity apps.
+- Debug overlay for processed RTL elements.
+- Optional import/export for settings.
 
 ## Contributing
-Issues and PRs are welcome. Please describe the site/URL and include screenshots if reporting layout problems.
+
+Issues and PRs are welcome. Please include the URL, browser version, screenshots, and a short before/after description when reporting layout or detection bugs.
 
 ## License
+
 CC BY-NC-ND 4.0 — see `LICENSE`.
 
 ## Donate
+
 If this project helps you, consider a small donation. Thank you!
 
 ```
@@ -87,7 +122,6 @@ Wallet: 0x5ba08cc1429bead9c07dc2030b881c6ed33c3a00
 ```
 
 ## Links
+
 - GitHub: https://github.com/Nishef1/RTL-Fixancer
-- [فارسی (Persian)](README.fa.md) - نسخه فارسی برای کاربران ایرانی
-
-
+- فارسی / Persian: [README.fa.md](README.fa.md)
