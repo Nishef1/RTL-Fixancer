@@ -40,7 +40,8 @@
                 "languages/hebrew.js",
                 "content.js",
                 "content-patch.js",
-                "content-rtl-upgrade.js"
+                "content-rtl-upgrade.js",
+                "content-ui-guard.js"
             ],
             "run_at": "document_start",
             "all_frames": true
