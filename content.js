@@ -2271,6 +2271,11 @@ class RTLAIStudioManager {
         if (this._spaOnUrlChanged) {
             window.removeEventListener('urlchange', this._spaOnUrlChanged);
         }
+        if (this._spaDebounceTimer) {
+            clearTimeout(this._spaDebounceTimer);
+            this._spaDebounceTimer = null;
+        }
+        this.lastUrl = location.href;
 
         // حذف IntersectionObserver
         if (this.intersectionObserver) {
@@ -2361,6 +2366,30 @@ class RTLAIStudioManager {
         };
     }
 
+    // Compare URLs ignoring hash and search params — changes there
+    // (e.g., download tracking, modal state) should not trigger full reload.
+    _urlsDifferSignificantly(a, b) {
+        try {
+            const ua = new URL(a);
+            const ub = new URL(b);
+            return ua.origin + ua.pathname !== ub.origin + ub.pathname;
+        } catch (_) {
+            return a !== b;
+        }
+    }
+
+    _debouncedUrlReload() {
+        if (this._spaDebounceTimer) return;
+        this._spaDebounceTimer = setTimeout(() => {
+            this._spaDebounceTimer = null;
+            const current = location.href;
+            if (this._urlsDifferSignificantly(current, this.lastUrl)) {
+                this.lastUrl = current;
+                try { this.fullReload(); } catch (_) { setTimeout(() => this.fullReload(), 150); }
+            }
+        }, 800);
+    }
+
     setupSpaUrlWatcher() {
         // Event-driven hooks
         try {
@@ -2385,24 +2414,12 @@ class RTLAIStudioManager {
                 window.__rtlHistoryPatched = true;
             }
 
-            this._spaOnUrlChanged = () => {
-                if (location.href !== this.lastUrl) {
-                    this.lastUrl = location.href;
-                    
-                    try { this.fullReload(); } catch (_) { setTimeout(() => this.fullReload(), 150); }
-                }
-            };
+            this._spaOnUrlChanged = () => this._debouncedUrlReload();
             window.addEventListener('urlchange', this._spaOnUrlChanged);
         } catch (_) {}
 
-        // Polling fallback
-        this.spaPollTimer = setInterval(() => {
-            if (location.href !== this.lastUrl) {
-                
-                this.lastUrl = location.href;
-                try { this.fullReload(); } catch (_) { setTimeout(() => this.fullReload(), 150); }
-            }
-        }, 500); // فرکانس بالاتر
+        // Polling fallback — also debounced
+        this.spaPollTimer = setInterval(() => this._debouncedUrlReload(), 500);
     }
 
     // بررسی دوره‌ای برای زمانی که تب جدیدی باز می‌شود و site-enabled از قبل ست شده اما تب هنوز شروع نشده
