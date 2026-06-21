@@ -1486,8 +1486,10 @@ class RTLAIStudioManager {
         
         if (dangerousTags.includes(element.tagName)) return false;
         if (element === document.documentElement || element === document.body || element === document.head) return false;
-        if (this.processedElements.has(element)) return false;
         if (this.isCodeRelatedElement(element)) return false;
+
+        // Allow re-processing of recycled DOM elements (virtual lists like DeepSeek).
+        // Text-signature cache (isElementAlreadyProcessed) prevents redundant work for unchanged text.
 
         // عناصر داخل ادیتورهای ورودی (composer) را پردازش نکن تا استایل Wrapper بر آنها غالب شود
         if (this.isInsideEditableComposer(element)) return false;
