@@ -4,6 +4,7 @@
     const TIMER_KEY = '__rtlFixancerGenericUpgradeTimer';
     const RTL_RE = /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB1D-\uFB4F\uFB50-\uFDFF\uFE70-\uFEFF]/;
     const TEXT_SELECTOR = 'p, li, td, th, blockquote, h1, h2, h3, h4, h5, h6, span, cite, q, em, strong, b, i, u, mark, small, time, dd, dt';
+    const CHATGPT_MAIN_SELECTOR = '[data-testid="conversation-turn"], [data-message-author-role], .markdown, [data-testid="markdown"]';
     const SKIP_SELECTOR = [
         'script', 'style', 'noscript', 'code', 'pre', 'kbd', 'samp', 'textarea', 'input',
         'button', 'select', 'option', 'nav', 'header', 'footer', 'aside', 'menu', 'form',
@@ -48,7 +49,15 @@
         return common?.hasRtlText ? common.hasRtlText(text) : RTL_RE.test(text);
     }
 
-    function clearOldState(manager, element) {
+    function isChatGPTManagedArea(manager, element) {
+        try {
+            return !!(manager?.isChatGPT && element?.closest?.(CHATGPT_MAIN_SELECTOR));
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function clearLegacyState(manager, element) {
         try { element.removeAttribute('data-ai-rtl-english-text'); } catch (_) {}
         try { element.removeAttribute('data-ai-rtl-persian-text'); } catch (_) {}
         try { element.removeAttribute('data-ai-rtl-processed'); } catch (_) {}
@@ -65,8 +74,24 @@
         } catch (_) {}
     }
 
+    function clearLegacyEnglishState(manager, element) {
+        try { element.removeAttribute('data-ai-rtl-english-text'); } catch (_) {}
+        try { element.removeAttribute('data-ai-rtl-processed'); } catch (_) {}
+        try { manager.processedElements?.delete?.(element); } catch (_) {}
+        try { manager.stableElements?.delete?.(element); } catch (_) {}
+        try {
+            const text = typeof manager?.getCleanText === 'function' ? manager.getCleanText(element) : (element.textContent || '').trim();
+            if (typeof manager?.generateElementSignature === 'function') {
+                manager.processedTextCache?.delete?.(manager.generateElementSignature(element, text));
+            }
+            if (typeof manager?.getElementSignature === 'function') {
+                manager.elementSignatureCache?.delete?.(manager.getElementSignature(element));
+            }
+        } catch (_) {}
+    }
+
     function clearWrongUpgrade(manager, element) {
-        clearOldState(manager, element);
+        clearLegacyState(manager, element);
         try { element.removeAttribute('data-rtl-fixancer-rtl-text'); } catch (_) {}
         try { element.removeAttribute('data-rtl-fixancer-language'); } catch (_) {}
         try { element.removeAttribute('dir'); } catch (_) {}
@@ -79,6 +104,10 @@
     function cleanupStructuralMistakes(manager) {
         const upgraded = Array.from(document.querySelectorAll('[data-rtl-fixancer-rtl-text]'));
         for (const element of upgraded) {
+            if (isChatGPTManagedArea(manager, element)) {
+                clearWrongUpgrade(manager, element);
+                continue;
+            }
             if (isStructuralContainer(element) || !hasDirectRtlText(element)) clearWrongUpgrade(manager, element);
         }
 
@@ -88,15 +117,25 @@
         }
     }
 
-    function applyTypography(element) {
+    function applyTypography(manager, element) {
+        const text = directText(element);
         const common = window.RTLFixancerCommon;
-        if (common?.applyRtlTypography?.(element, { text: directText(element) })) return true;
+        const applied = common?.applyRtlTypography?.(element, { text });
+        const configuredFont = typeof manager?.getFontFamily === 'function' ? manager.getFontFamily() : null;
+        if (applied) {
+            if (configuredFont) {
+                try { element.style.fontFamily = configuredFont; } catch (_) {}
+            }
+            return true;
+        }
         try { element.setAttribute('dir', 'rtl'); } catch (_) {}
         try { element.setAttribute('data-rtl-fixancer-rtl-text', 'true'); } catch (_) {}
         try { element.style.direction = 'rtl'; } catch (_) {}
         try { element.style.textAlign = 'right'; } catch (_) {}
         try { element.style.unicodeBidi = 'plaintext'; } catch (_) {}
-        try { element.style.fontFamily = 'Segoe UI, Tahoma, Arial, sans-serif'; } catch (_) {}
+        if (configuredFont) {
+            try { element.style.fontFamily = configuredFont; } catch (_) {}
+        }
         return true;
     }
 
@@ -113,9 +152,12 @@
         let upgraded = 0;
         for (const element of candidates) {
             if (upgraded >= 150) break;
+            if (isChatGPTManagedArea(manager, element)) continue;
             if (!hasDirectRtlText(element)) continue;
-            clearOldState(manager, element);
-            applyTypography(element);
+            if (element.hasAttribute('data-ai-rtl-english-text')) {
+                clearLegacyEnglishState(manager, element);
+            }
+            applyTypography(manager, element);
             upgraded++;
         }
     }
