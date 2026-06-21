@@ -3,8 +3,14 @@
 
     const TIMER_KEY = '__rtlFixancerGenericUpgradeTimer';
     const RTL_RE = /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB1D-\uFB4F\uFB50-\uFDFF\uFE70-\uFEFF]/;
-    const TEXT_SELECTOR = 'p, span, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, div, a, button, label, summary, details, cite, q, em, strong, b, i, u, mark, small, time, dd, dt';
-    const SKIP_SELECTOR = 'script, style, noscript, code, pre, kbd, samp, textarea, input';
+    const TEXT_SELECTOR = 'p, li, td, th, blockquote, h1, h2, h3, h4, h5, h6, span, cite, q, em, strong, b, i, u, mark, small, time, dd, dt';
+    const SKIP_SELECTOR = [
+        'script', 'style', 'noscript', 'code', 'pre', 'kbd', 'samp', 'textarea', 'input',
+        'button', 'select', 'option', 'nav', 'header', 'footer', 'aside', 'menu', 'form',
+        '[role="navigation"]', '[role="banner"]', '[role="toolbar"]', '[role="button"]',
+        '[data-testid*="sidebar" i]', '[data-testid*="nav" i]', '[aria-label*="sidebar" i]',
+        '[class*="sidebar" i]', '[class*="navbar" i]', '[class*="topbar" i]', '[class*="header" i]'
+    ].join(', ');
 
     function isEnabled(manager) {
         try {
@@ -14,9 +20,30 @@
         }
     }
 
-    function hasRtlText(element) {
-        if (!element || element.matches?.(SKIP_SELECTOR) || element.closest?.(SKIP_SELECTOR)) return false;
-        const text = element.textContent || '';
+    function directText(element) {
+        try {
+            return Array.from(element.childNodes)
+                .filter(node => node.nodeType === Node.TEXT_NODE)
+                .map(node => node.textContent || '')
+                .join(' ')
+                .trim();
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function isStructuralContainer(element) {
+        if (!element || element.matches?.(SKIP_SELECTOR) || element.closest?.(SKIP_SELECTOR)) return true;
+        const tag = element.tagName?.toLowerCase();
+        if (tag === 'div' || tag === 'section' || tag === 'article' || tag === 'main') return true;
+        if ((element.children?.length || 0) > 3) return true;
+        return false;
+    }
+
+    function hasDirectRtlText(element) {
+        if (isStructuralContainer(element)) return false;
+        const text = directText(element);
+        if (!text) return false;
         const common = window.RTLFixancerCommon;
         return common?.hasRtlText ? common.hasRtlText(text) : RTL_RE.test(text);
     }
@@ -28,9 +55,26 @@
         try { manager.stableElements?.delete?.(element); } catch (_) {}
     }
 
+    function clearWrongUpgrade(element) {
+        try { element.removeAttribute('data-rtl-fixancer-rtl-text'); } catch (_) {}
+        try { element.removeAttribute('data-rtl-fixancer-language'); } catch (_) {}
+        try { element.removeAttribute('dir'); } catch (_) {}
+        try { element.style.removeProperty('direction'); } catch (_) {}
+        try { element.style.removeProperty('text-align'); } catch (_) {}
+        try { element.style.removeProperty('unicode-bidi'); } catch (_) {}
+        try { element.style.removeProperty('font-family'); } catch (_) {}
+    }
+
+    function cleanupStructuralMistakes() {
+        const upgraded = Array.from(document.querySelectorAll('[data-rtl-fixancer-rtl-text]'));
+        for (const element of upgraded) {
+            if (isStructuralContainer(element) || !hasDirectRtlText(element)) clearWrongUpgrade(element);
+        }
+    }
+
     function applyTypography(element) {
         const common = window.RTLFixancerCommon;
-        if (common?.applyRtlTypography?.(element)) return true;
+        if (common?.applyRtlTypography?.(element, { text: directText(element) })) return true;
         try { element.setAttribute('dir', 'rtl'); } catch (_) {}
         try { element.setAttribute('data-rtl-fixancer-rtl-text', 'true'); } catch (_) {}
         try { element.style.direction = 'rtl'; } catch (_) {}
@@ -42,15 +86,18 @@
 
     function run(manager) {
         if (!isEnabled(manager)) return;
+        cleanupStructuralMistakes();
+
         const selector = [
             '[data-ai-rtl-english-text]:not([data-rtl-fixancer-rtl-text])',
             `${TEXT_SELECTOR}:not([data-ai-rtl-persian-text]):not([data-rtl-fixancer-rtl-text])`
         ].join(', ');
+
         const candidates = Array.from(document.querySelectorAll(selector));
         let upgraded = 0;
         for (const element of candidates) {
             if (upgraded >= 150) break;
-            if (!hasRtlText(element)) continue;
+            if (!hasDirectRtlText(element)) continue;
             clearOldState(manager, element);
             applyTypography(element);
             upgraded++;
