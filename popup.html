@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -23,17 +23,10 @@
             --radius: 10px;
             --radius-sm: 7px;
             --radius-xs: 5px;
-            --transition: 0.2s ease;
-            --font-app: 'ShabnamPopup', Tahoma, Arial, sans-serif;
+            --font-app: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, Arial, sans-serif;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        @font-face {
-            font-family: 'ShabnamPopup';
-            src: url('shabnam.woff2') format('woff2');
-            font-display: swap;
-        }
 
         body {
             font-family: var(--font-app);
@@ -66,7 +59,7 @@
         .icon-links {
             position: absolute;
             top: 9px;
-            left: 12px;
+            right: 12px;
             display: flex;
             gap: 6px;
         }
@@ -208,7 +201,7 @@
             padding: 1px 8px;
             border-radius: 10px;
             font-size: 10.5px;
-            margin-right: 5px;
+            margin-left: 5px;
             font-weight: 700;
         }
         .sites-container {
@@ -262,66 +255,66 @@
 </head>
 <body>
     <div class="header">
-        <h1>🔄 RTL Fixancer</h1>
+        <h1>RTL Fixancer</h1>
         <div class="icon-links" aria-label="Project links">
-            <button id="btnDonate" class="icon-btn donate" title="حمایت" aria-label="حمایت">
+            <button id="btnDonate" class="icon-btn donate" title="Donate" aria-label="Donate">
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.1 21.35l-1.1-1.02C5.14 14.94 2 12.12 2 8.5 2 6 4 4 6.5 4c1.54 0 3.04.99 3.57 2.36h.87C11.46 4.99 12.96 4 14.5 4 17 4 19 6 19 8.5c0 3.62-3.14 6.44-8.9 11.83l-1.1 1.02Z"/></svg>
             </button>
-            <button id="btnGithub" class="icon-btn github" title="گیت‌هاب" aria-label="گیت‌هاب">
+            <button id="btnGithub" class="icon-btn github" title="GitHub" aria-label="GitHub">
                 <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .2a8 8 0 0 0-2.53 15.6c.4.07.55-.17.55-.38v-1.33c-2.25.49-2.72-1.08-2.72-1.08-.36-.9-.88-1.14-.88-1.14-.72-.49.06-.48.06-.48.8.06 1.22.83 1.22.83.71 1.22 1.86.87 2.32.66.07-.52.28-.87.5-1.07-1.8-.2-3.69-.9-3.69-4a3.1 3.1 0 0 1 .82-2.15c-.08-.2-.36-1.02.08-2.12 0 0 .68-.22 2.22.82a7.6 7.6 0 0 1 4.04 0c1.54-1.04 2.22-.82 2.22-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.11-1.9 3.8-3.71 4 .29.25.54.74.54 1.5v2.22c0 .21.15.46.55.38A8 8 0 0 0 8 .2Z"/></svg>
             </button>
         </div>
         <div id="hearts" class="hearts-container" aria-hidden="true"></div>
-        <div id="status" class="status disconnected">وضعیت: در حال اتصال...</div>
+        <div id="status" class="status disconnected">Status: Connecting...</div>
     </div>
 
     <div class="main-content">
         <div class="section">
             <h3 style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                <span>🌐 سایت فعلی</span>
-                <button id="btnExportPdf" class="btn mini" aria-label="دانلود PDF صفحه">📥 PDF</button>
+                <span data-i18n="currentSite">🌐 Current site</span>
+                <button id="btnExportPdf" class="btn mini" aria-label="Export PDF">📥 PDF</button>
             </h3>
             <div class="current-site">
-                <div class="site-url" id="currentSiteUrl">در حال بارگذاری...</div>
+                <div class="site-url" id="currentSiteUrl">Loading...</div>
                 <div class="site-controls" id="currentSiteControls" style="display: none;">
                     <div class="site-toggle-container">
-                        <span class="site-toggle-label">فعال</span>
-                        <label class="mini-switch" aria-label="فعال/غیرفعال سایت فعلی">
+                        <span class="site-toggle-label" data-i18n="active">Active</span>
+                        <label class="mini-switch" aria-label="Enable or disable current site">
                             <input type="checkbox" id="currentSiteToggle">
                             <span class="mini-slider"></span>
                         </label>
                     </div>
-                    <button id="btnReapply" class="btn secondary" aria-label="اعمال مجدد روی این صفحه">اعمال مجدد</button>
+                    <button id="btnReapply" class="btn secondary" aria-label="Re-apply on this page">Re-apply</button>
                 </div>
             </div>
         </div>
 
         <div class="section" id="settingsPanel">
-            <h3>🎨 تنظیمات</h3>
+            <h3 data-i18n="settings">🎨 Settings</h3>
             <div class="form-row">
                 <div class="form-group">
-                    <label for="fontSelect">فونت</label>
+                    <label for="fontSelect">Font</label>
                     <select id="fontSelect">
-                        <option value="vazir">وزیر</option>
-                        <option value="shabnam">شبنم</option>
-                        <option value="default">پیشفرض</option>
+                        <option value="vazir">Vazir</option>
+                        <option value="shabnam">Shabnam</option>
+                        <option value="default">Default</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="fontSizeSelect">سایز</label>
+                    <label for="fontSizeSelect">Size</label>
                     <select id="fontSizeSelect">
-                        <option value="default">پیشفرض</option>
-                        <option value="small">کوچک</option>
-                        <option value="medium">متوسط</option>
-                        <option value="large">بزرگ</option>
+                        <option value="default">Default</option>
+                        <option value="small">Small</option>
+                        <option value="medium">Medium</option>
+                        <option value="large">Large</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="detectionMode">حساسیت</label>
+                    <label for="detectionMode">Sensitivity</label>
                     <select id="detectionMode">
-                        <option value="high">بالا</option>
-                        <option value="medium">متوسط</option>
-                        <option value="low">پایین</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
                     </select>
                 </div>
             </div>
@@ -329,18 +322,19 @@
 
         <div class="section">
             <h3>
-                📋 سایتها
+                <span data-i18n="sites">📋 Sites</span>
                 <span class="sites-count" id="sitesCount">0</span>
             </h3>
             <div class="sites-container" id="sitesList">
-                <div class="empty-sites">هیچ سایتی اضافه نشده</div>
+                <div class="empty-sites">No sites added yet</div>
             </div>
         </div>
 
-        <div class="help">با تغییر تنظیمات، نتایج بلافاصله اعمال می‌شود.</div>
+        <div class="help">Changes are applied immediately.</div>
     </div>
 
     <script src="popup.js"></script>
+    <script src="ui-i18n.js"></script>
     <script src="popup-patch.js"></script>
 </body>
 </html>
