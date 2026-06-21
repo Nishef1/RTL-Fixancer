@@ -8,6 +8,13 @@ const DEFAULT_SETTINGS = {
 };
 
 const INJECTABLE_PROTOCOLS = new Set(['http:', 'https:']);
+const CONTENT_SCRIPT_FILES = [
+    'rtl-common.js',
+    'languages/arabic.js',
+    'languages/hebrew.js',
+    'content.js',
+    'content-patch.js'
+];
 
 function getSyncStorage(defaults = DEFAULT_SETTINGS) {
     return new Promise((resolve, reject) => {
@@ -61,29 +68,10 @@ function createContextMenus() {
         }
 
         const menus = [
-            {
-                id: 'rtl_parent',
-                title: 'RTL Fixancer',
-                contexts: ['all']
-            },
-            {
-                id: 'rtl_toggle_current_domain',
-                parentId: 'rtl_parent',
-                title: 'فعال/غیرفعال کردن دامنه فعلی',
-                contexts: ['all']
-            },
-            {
-                id: 'rtl_apply_reload',
-                parentId: 'rtl_parent',
-                title: 'اعمال مجدد در این صفحه',
-                contexts: ['all']
-            },
-            {
-                id: 'rtl_export_pdf',
-                parentId: 'rtl_parent',
-                title: '⬇️ دانلود PDF از متن صفحه',
-                contexts: ['all']
-            }
+            { id: 'rtl_parent', title: 'RTL Fixancer', contexts: ['all'] },
+            { id: 'rtl_toggle_current_domain', parentId: 'rtl_parent', title: 'Toggle current domain', contexts: ['all'] },
+            { id: 'rtl_apply_reload', parentId: 'rtl_parent', title: 'Re-apply on this page', contexts: ['all'] },
+            { id: 'rtl_export_pdf', parentId: 'rtl_parent', title: '⬇️ Export page text to PDF', contexts: ['all'] }
         ];
 
         let created = 0;
@@ -216,7 +204,7 @@ async function requestContentReload(tabId, settings) {
     let result = await sendMessageToTab(tabId, message);
     if (result.ok) return result;
 
-    const injection = await executeScriptSafely(tabId, { files: ['content.js', 'content-patch.js'] });
+    const injection = await executeScriptSafely(tabId, { files: CONTENT_SCRIPT_FILES });
     if (!injection.ok) return injection;
 
     await new Promise(resolve => setTimeout(resolve, 250));
@@ -232,7 +220,7 @@ async function exportPdf(tab) {
     let result = await sendMessageToTab(tab.id, { action: 'exportPdf' });
     if (result.ok) return;
 
-    const injection = await executeScriptSafely(tab.id, { files: ['content.js', 'content-patch.js'] });
+    const injection = await executeScriptSafely(tab.id, { files: CONTENT_SCRIPT_FILES });
     if (injection.ok) {
         await new Promise(resolve => setTimeout(resolve, 500));
         result = await sendMessageToTab(tab.id, { action: 'exportPdf' });
