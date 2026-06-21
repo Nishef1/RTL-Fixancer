@@ -63,6 +63,7 @@ class RTLAIStudioManager {
         this.isAIStudio = this.detectAIStudio();
         this.isPerplexity = this.detectPerplexity();
         this.isChatGPT = this.detectChatGPT();
+        this.isDeepSeek = this.detectDeepSeek();
         this.currentDomain = this.getCurrentDomain();
 
         window.rtlAIStudioInitialized = true;
@@ -108,9 +109,17 @@ class RTLAIStudioManager {
         }
     }
 
+    detectDeepSeek() {
+        try {
+            return /deepseek\.com/.test(window.location.hostname);
+        } catch (_) {
+            return false;
+        }
+    }
+
     // متد کمکی برای تشخیص سایت‌های چت ویژه
     isSpecialChatSite() {
-        return this.isAIStudio || this.isPerplexity || this.isChatGPT;
+        return this.isAIStudio || this.isPerplexity || this.isChatGPT || this.isDeepSeek;
     }
 
     startHeartbeat() {
@@ -314,6 +323,7 @@ class RTLAIStudioManager {
                     }
                 });
                 if (this.isChatGPT) this._setupSiteMonitoring('ChatGPT', 'processChatGPTSpecialElements', 1000, 8000);
+                if (this.isDeepSeek) this._setupSiteMonitoring('DeepSeek', 'processChatElementsOptimized', 1000, 8000);
                 
                 // پردازش اضافی برای اطمینان
                 requestIdleCallback(() => this.immediateProcessAllContent(), { timeout: 1000 });
@@ -1199,6 +1209,11 @@ class RTLAIStudioManager {
                            '.markdown :not([data-ai-rtl-persian-text]):not([data-ai-rtl-english-text])',
                 maxRecheck: 70,
                 logName: 'ChatGPT'
+            },
+            'DeepSeek': {
+                selectors: TEXT_TAGS_SELECTOR,
+                maxRecheck: 70,
+                logName: 'DeepSeek'
             }
         };
 
@@ -2059,6 +2074,7 @@ class RTLAIStudioManager {
         // فرکانس بالاتر برای سایت‌های چت
         const checkInterval = this.isAIStudio ? 600 : 
                              this.isChatGPT ? 700 : 
+                             this.isDeepSeek ? 700 : 
                              this.isPerplexity ? 800 : 1000;
         this.inputCheckTimer = setInterval(() => {
             this.processInputs(document);
@@ -2205,6 +2221,7 @@ class RTLAIStudioManager {
                 }
             });
             if (this.isChatGPT) this._setupSiteMonitoring('ChatGPT', 'processChatGPTSpecialElements', 1000, 8000);
+            if (this.isDeepSeek) this._setupSiteMonitoring('DeepSeek', 'processChatElementsOptimized', 1000, 8000);
             
             // پردازش چندباره برای اطمینان
             requestIdleCallback(() => this.immediateProcessAllContent(), { timeout: 500 });
