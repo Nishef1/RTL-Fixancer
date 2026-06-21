@@ -13,20 +13,25 @@
             name: config.name || config.code,
             regex: config.regex,
             fontStack: config.fontStack || 'Tahoma, Arial, sans-serif',
-            direction: config.direction || 'rtl'
+            direction: config.direction || 'rtl',
+            priority: Number.isFinite(config.priority) ? config.priority : 100
         };
     };
 
     root.registerLanguage({
         code: 'fa',
         name: 'Persian',
-        regex: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/,
-        fontStack: 'Vazir, Shabnam, Tahoma, Arial, sans-serif'
+        // Persian-specific letters/digits/ZWNJ. Generic Arabic block is handled by Arabic config.
+        regex: /[\u067E\u0686\u0698\u06AF\u06A9\u06CC\u06F0-\u06F9\u200C]/,
+        fontStack: 'Vazir, Shabnam, Noto Naskh Arabic, Tahoma, Arial, sans-serif',
+        priority: 10
     });
 
     root.detectLanguages = function detectLanguages(text) {
         const value = typeof text === 'string' ? text : '';
-        return Object.values(root.languages).filter(language => language.regex.test(value));
+        return Object.values(root.languages)
+            .filter(language => language.regex.test(value))
+            .sort((a, b) => a.priority - b.priority);
     };
 
     root.detectPrimaryLanguage = function detectPrimaryLanguage(text) {
