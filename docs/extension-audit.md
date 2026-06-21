@@ -2,89 +2,67 @@
 
 Date: 2026-06-20
 
-## Scope
+## Current status
 
-Reviewed the extension against Manifest V3 operational and security practices:
+RTL Fixancer is now a Manifest V3 Chrome extension for multilingual RTL text enhancement. It supports Persian/Farsi, Arabic, and Hebrew through a shared RTL helper and separate language modules.
 
-- Manifest permissions and host permissions
-- Background service worker behavior
-- Content script activation model
-- Popup-to-content messaging and script injection fallback
-- URL handling for restricted browser pages
+## Runtime architecture
 
-## Fixed in this PR
+- `manifest.json` loads the full content chain at `document_start`.
+- `rtl-common.js` owns shared RTL language registration and typography helpers.
+- `languages/arabic.js` and `languages/hebrew.js` register extra RTL language configs.
+- `content.js` remains the legacy core engine.
+- `content-patch.js` patches subdomain-aware site matching without broad edits to the legacy core.
+- `content-rtl-upgrade.js` upgrades only safe text-leaf elements and avoids structural layout containers.
+- `content-ui-guard.js` keeps host-app UI controls such as tool-call labels, sidebars, nav items, and composer controls LTR.
+- `ui-i18n.js` centralizes popup UI strings and defaults to English.
+- `background.js` uses the same full content-script chain for fallback injection.
 
-### 1. Removed unnecessary broad host permissions
+## Fixed issues
 
-The manifest had `host_permissions` with `*://*/*` plus specific hosts. The extension already uses a static content script with `<all_urls>` and an internal per-site enable list, while popup/context-menu injection can rely on user invocation through `activeTab` and `scripting`.
+### 1. Removed broad host permissions
 
-Keeping broad `host_permissions` increases install-time warnings and violates least-privilege expectations. The PR removes the host permissions block and keeps the runtime permissions the current architecture actually needs.
+The old manifest requested broad `host_permissions`, including `*://*/*`. The current manifest does not request broad host permissions. Runtime behavior is controlled by the user's enabled-site list.
 
-### 2. Aligned manifest version metadata
+### 2. Hardened background URL handling
 
-`AGENTS.md` described the post-fix version as `3.4`, but `manifest.json` was still `3.3`. The PR updates the manifest version to `3.4` and adds `minimum_chrome_version: 88`, which is the general baseline for Manifest V3 support.
+The background service worker only attempts scripting and print fallback on supported `http:` and `https:` pages.
 
-### 3. Hardened background URL handling
+### 3. Removed unsafe JavaScript URL print fallback
 
-The background service worker now only attempts script injection or page printing on `http:` and `https:` pages. This avoids noisy failures on browser pages such as `chrome://`, `chrome-extension://`, `edge://`, local restricted pages, and similar protected URLs.
+The previous `javascript:window.print()` tab fallback was removed. The remaining fallback uses `chrome.scripting.executeScript({ func: () => window.print() })` on supported pages.
 
-### 4. Removed unsafe `javascript:` tab fallback
+### 4. Fixed stale settings dispatch after context-menu toggle
 
-The old PDF export fallback attempted to open a new tab with `javascript:window.print()`. This is brittle, unsafe, and not a reliable MV3 pattern. The PR replaces it with a single controlled `chrome.scripting.executeScript({ func: () => window.print() })` fallback and logs a safe error if that fails.
+The background toggle now stores the new `enabledSites` list and sends the fresh settings object to the current tab.
 
-### 5. Fixed stale settings dispatch after context-menu toggle
+### 5. Fixed subdomain mismatch
 
-The previous context-menu toggle stored a new `enabledSites` list, but sent the old settings object to the content script immediately after. The PR now builds `nextSettings` and sends the fresh state to the tab.
+Background, popup, and content runtime now use subdomain-aware matching so enabling `example.com` can cover `sub.example.com`.
 
-### 6. Centralized tab messaging and injection fallback
+### 6. Added multilingual RTL support
 
-`background.js` now uses small helpers for:
+Arabic and Hebrew are registered through separate modules while shared behavior is kept in `rtl-common.js`.
 
-- URL support checks
-- hostname extraction
-- tab messaging with `runtime.lastError` handling
-- script injection with explicit error handling
-- content reload fallback
+### 7. Prevented over-aggressive RTL on host UI
 
-This reduces duplicated callback code and prevents unhandled `runtime.lastError` noise.
+The generic RTL upgrade no longer targets structural containers such as `div`, `nav`, `header`, `aside`, `button`, sidebars, or topbars. A separate host UI guard forces known UI controls such as `Called tool`, `Thought for`, `Sources`, `Share`, and navigation/sidebar labels to stay LTR.
 
-## Important follow-up issue not changed in this PR
+### 8. Popup UI cleanup
 
-`background.js` uses subdomain-aware matching:
-
-```js
-hostname === site || hostname.endsWith('.' + site)
-```
-
-But `content.js` currently checks only exact domain membership:
-
-```js
-return sites.includes(this.currentDomain);
-```
-
-That can create an icon/content mismatch for subdomains. This PR intentionally did not touch `content.js` because it is a large, historically fragile file and the repo guide explicitly warns against broad edits there. Recommended targeted future fix:
-
-```js
-isSiteEnabled() {
-    if (!this.currentDomain) return false;
-    const sites = this.config && Array.isArray(this.config.enabledSites)
-        ? this.config.enabledSites
-        : [];
-    return sites.some(site => {
-        if (typeof site !== 'string') return false;
-        const normalizedSite = site.toLowerCase();
-        const normalizedDomain = this.currentDomain.toLowerCase();
-        return normalizedDomain === normalizedSite || normalizedDomain.endsWith('.' + normalizedSite);
-    });
-}
-```
+The popup is English by default and dynamic status/empty-state strings are translated through `ui-i18n.js`.
 
 ## Manual verification checklist
 
-1. Load the unpacked extension in Chrome.
-2. Confirm no manifest warning appears for unnecessary host permissions beyond content-script access.
-3. Open a normal `https://` page, enable the domain, and verify the icon turns on.
-4. Use context menu → re-apply and verify the page updates without console errors.
-5. Use context menu → export PDF and verify it opens the print dialog.
-6. Open `chrome://extensions` or another protected page and verify the extension fails gracefully without trying to inject scripts.
-7. Test subdomain behavior after the follow-up `content.js` fix.
+1. Reload the unpacked extension in `chrome://extensions`.
+2. Hard-refresh ChatGPT after the extension reload.
+3. Confirm the left sidebar, top bar, `Called tool`, and `Thought for` stay LTR.
+4. Confirm Persian assistant/user message text is RTL and readable.
+5. Test Arabic and Hebrew sample text in an AI chat response.
+6. Test popup site toggle, Re-apply, and PDF export on a normal `https://` page.
+7. Test a protected page such as `chrome://extensions` and confirm the extension fails gracefully.
+8. Test subdomain behavior: enable `example.com`, then verify `sub.example.com` inherits the enabled state.
+
+## Remaining caution
+
+`content.js` is still a large legacy file. Future improvements should continue using small, isolated patch files unless the core file is refactored with live browser verification.
