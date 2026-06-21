@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
     "name": "RTL Fixancer",
-    "version": "3.4",
-    "description": "بهبود و راست‌چین‌سازی هوشمند متون فارسی (Fix + Enhancer) - سازگار با محدودیتهای سیاست مرورگر",
+    "version": "3.5",
+    "description": "Smart RTL typography enhancement for Persian, Arabic, Hebrew, and other right-to-left text.",
     "author": "Nishef1",
     "homepage_url": "https://github.com/Nishef1/RTL-Fixancer",
     "minimum_chrome_version": "88",
@@ -35,6 +35,9 @@
                 "<all_urls>"
             ],
             "js": [
+                "rtl-common.js",
+                "languages/arabic.js",
+                "languages/hebrew.js",
                 "content.js",
                 "content-patch.js"
             ],
