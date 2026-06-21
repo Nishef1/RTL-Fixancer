@@ -50,12 +50,23 @@
 
     function clearOldState(manager, element) {
         try { element.removeAttribute('data-ai-rtl-english-text'); } catch (_) {}
+        try { element.removeAttribute('data-ai-rtl-persian-text'); } catch (_) {}
         try { element.removeAttribute('data-ai-rtl-processed'); } catch (_) {}
         try { manager.processedElements?.delete?.(element); } catch (_) {}
         try { manager.stableElements?.delete?.(element); } catch (_) {}
+        try {
+            const text = typeof manager?.getCleanText === 'function' ? manager.getCleanText(element) : (element.textContent || '').trim();
+            if (typeof manager?.generateElementSignature === 'function') {
+                manager.processedTextCache?.delete?.(manager.generateElementSignature(element, text));
+            }
+            if (typeof manager?.getElementSignature === 'function') {
+                manager.elementSignatureCache?.delete?.(manager.getElementSignature(element));
+            }
+        } catch (_) {}
     }
 
-    function clearWrongUpgrade(element) {
+    function clearWrongUpgrade(manager, element) {
+        clearOldState(manager, element);
         try { element.removeAttribute('data-rtl-fixancer-rtl-text'); } catch (_) {}
         try { element.removeAttribute('data-rtl-fixancer-language'); } catch (_) {}
         try { element.removeAttribute('dir'); } catch (_) {}
@@ -65,10 +76,10 @@
         try { element.style.removeProperty('font-family'); } catch (_) {}
     }
 
-    function cleanupStructuralMistakes() {
-        const upgraded = Array.from(document.querySelectorAll('[data-rtl-fixancer-rtl-text]'));
+    function cleanupStructuralMistakes(manager) {
+        const upgraded = Array.from(document.querySelectorAll('[data-rtl-fixancer-rtl-text], [data-ai-rtl-persian-text]'));
         for (const element of upgraded) {
-            if (isStructuralContainer(element) || !hasDirectRtlText(element)) clearWrongUpgrade(element);
+            if (isStructuralContainer(element) || !hasDirectRtlText(element)) clearWrongUpgrade(manager, element);
         }
     }
 
@@ -86,7 +97,7 @@
 
     function run(manager) {
         if (!isEnabled(manager)) return;
-        cleanupStructuralMistakes();
+        cleanupStructuralMistakes(manager);
 
         const selector = [
             '[data-ai-rtl-english-text]:not([data-rtl-fixancer-rtl-text])',

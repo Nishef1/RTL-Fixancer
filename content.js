@@ -462,7 +462,6 @@ class RTLAIStudioManager {
 
         const blockElements = [
             'p[data-ai-rtl-persian-text="true"]',
-            'div[data-ai-rtl-persian-text="true"]',
             'h1[data-ai-rtl-persian-text="true"]',
             'h2[data-ai-rtl-persian-text="true"]',
             'h3[data-ai-rtl-persian-text="true"]',
@@ -490,7 +489,6 @@ class RTLAIStudioManager {
         const inlineElements = [
             'span[data-ai-rtl-persian-text="true"]',
             'a[data-ai-rtl-persian-text="true"]',
-            'button[data-ai-rtl-persian-text="true"]',
             'label[data-ai-rtl-persian-text="true"]',
             'option[data-ai-rtl-persian-text="true"]',
             'optgroup[data-ai-rtl-persian-text="true"]',
@@ -1203,7 +1201,6 @@ class RTLAIStudioManager {
                     const hasPersianChild = element.querySelector('[data-ai-rtl-persian-text]');
                     if (hasPersianChild) {
                         element.removeAttribute('data-ai-rtl-english-text');
-                        element.setAttribute('data-ai-rtl-persian-text', 'true');
                         this.stableElements.delete(element);
                         this.processedTextCache.delete(this.generateElementSignature(element, this.getCleanText(element)));
                         this.processElement(element);
@@ -1277,7 +1274,6 @@ class RTLAIStudioManager {
                     const hasPersianChild = element.querySelector('[data-ai-rtl-persian-text]');
                     if (hasPersianChild) {
                         element.removeAttribute('data-ai-rtl-english-text');
-                        element.setAttribute('data-ai-rtl-persian-text', 'true');
                         this.stableElements.delete(element);
                         this.processedTextCache.delete(this.generateElementSignature(element, this.getCleanText(element)));
                         this.processElement(element);
@@ -1600,8 +1596,8 @@ class RTLAIStudioManager {
 
     // بهبود RTL Safety با کاهش محدودیت‌ها
     isAbsolutelySafeForRTL(element) {
-        const safeTags = ['P', 'SPAN', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TD', 'TH', 'BLOCKQUOTE', 'DIV',
-            'A', 'BUTTON', 'LABEL', 'OPTION', 'OPTGROUP', 'LEGEND', 'FIGCAPTION', 'CAPTION', 'SUMMARY', 'DETAILS',
+        const safeTags = ['P', 'SPAN', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TD', 'TH', 'BLOCKQUOTE',
+            'A', 'LABEL', 'OPTION', 'OPTGROUP', 'LEGEND', 'FIGCAPTION', 'CAPTION', 'SUMMARY', 'DETAILS',
             'CITE', 'Q', 'EM', 'STRONG', 'B', 'I', 'U', 'MARK', 'SMALL', 'DEL', 'INS', 'SUB', 'SUP', 'TIME', 'ABBR',
             'DD', 'DT', 'ADDRESS', 'OUTPUT'];
         if (!safeTags.includes(element.tagName)) return false;
@@ -1917,6 +1913,7 @@ class RTLAIStudioManager {
         try {
             // اعمال attribute و style های ذخیره شده
             if (cachedData.language === 'persian') {
+                if (!this.isAbsolutelySafeForRTL(element)) return;
                 element.setAttribute('data-ai-rtl-persian-text', 'true');
                 if (!this.isInlineElement(element)) {
                     element.style.setProperty('direction', 'rtl', 'important');
