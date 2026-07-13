@@ -8,7 +8,7 @@ const read = relative => readFile(path.join(root, relative), 'utf8');
 const manifest = JSON.parse(await read('manifest.json'));
 
 assert.equal(manifest.manifest_version, 3, 'Manifest V3 is required.');
-assert.equal(manifest.version, '4.0.0');
+assert.equal(manifest.version, '4.0.1');
 assert.equal(manifest.background?.service_worker, 'background.js');
 assert.equal(manifest.content_scripts, undefined, 'Static all-site content scripts are forbidden.');
 assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
@@ -35,6 +35,11 @@ assert(background.includes('registerContentScripts'), 'Dynamic content-script re
 assert(background.includes('cleanupOpenTabs'), 'Disabling a site must clean already-open matching tabs.');
 assert(background.includes('chrome.permissions.onRemoved'), 'Permission changes must resynchronize dynamic registrations.');
 assert(background.includes("case 'runtime:state'"), 'Tab icon state must be driven without the broad tabs permission.');
+
+const core = await read('lib/core.js');
+assert(core.includes('`http://${host}/*`'), 'Runtime host requests must use the declared HTTP scheme.');
+assert(core.includes('`https://${host}/*`'), 'Runtime host requests must use the declared HTTPS scheme.');
+assert(!core.includes('`*://${host}/*`'), 'Wildcard-scheme permission requests are not manifest-compatible.');
 
 const content = await read('content.js');
 assert(content.includes('MutationObserver'), 'The content runtime must be event driven.');
