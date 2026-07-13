@@ -247,22 +247,32 @@
             this.styleElement = style;
         }
 
+        enqueueCandidateAndBlock(element) {
+            if (!element) return;
+            const candidate = element.matches?.(CANDIDATE_SELECTOR)
+                ? element
+                : element.closest?.(CANDIDATE_SELECTOR);
+            if (candidate) this.enqueue(candidate);
+
+            const block = element.matches?.(BLOCK_SELECTOR)
+                ? element
+                : element.closest?.(BLOCK_SELECTOR);
+            if (block && block !== candidate) this.enqueue(block);
+        }
+
         onMutation(mutations) {
             if (!this.active) return;
             for (const mutation of mutations) {
                 if (mutation.type === 'attributes') {
                     const element = mutation.target;
-                    if (element?.matches?.(CANDIDATE_SELECTOR)) this.enqueue(element);
-                    const candidate = element?.closest?.(CANDIDATE_SELECTOR);
-                    if (candidate && candidate !== element) this.enqueue(candidate);
+                    this.enqueueCandidateAndBlock(element);
                     if (element?.matches?.(EDITABLE_SELECTOR)) this.processEditor(element);
                     continue;
                 }
 
                 if (mutation.type === 'characterData') {
                     const parent = mutation.target.parentElement;
-                    const candidate = parent?.closest?.(CANDIDATE_SELECTOR);
-                    if (candidate) this.enqueue(candidate);
+                    this.enqueueCandidateAndBlock(parent);
                     const editor = parent?.closest?.(EDITABLE_SELECTOR);
                     if (editor) this.processEditor(editor);
                     continue;
@@ -270,13 +280,13 @@
 
                 for (const node of mutation.addedNodes) {
                     if (node.nodeType === Node.TEXT_NODE) {
-                        const parent = node.parentElement;
-                        if (parent?.matches?.(CANDIDATE_SELECTOR)) this.enqueue(parent);
+                        this.enqueueCandidateAndBlock(node.parentElement);
                         continue;
                     }
                     if (node.nodeType !== Node.ELEMENT_NODE) continue;
                     this.scan(node);
                     this.scanEditors(node);
+                    this.enqueueCandidateAndBlock(node.parentElement);
                 }
             }
             this.pruneTouchedElements();
