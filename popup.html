@@ -3,94 +3,130 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="light dark">
+    <meta name="color-scheme" content="light">
     <title>RTL Fixancer</title>
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
     <main class="app" aria-labelledby="app-title">
         <header class="hero">
-            <div>
-                <p class="eyebrow">RTL typography</p>
-                <h1 id="app-title">RTL Fixancer</h1>
-            </div>
-            <div class="hero-actions">
-                <button id="githubButton" class="icon-button" type="button" aria-label="Open GitHub repository" title="GitHub">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.3 11.3 0 0 0-3.57 22c.57.1.78-.24.78-.55v-2.18c-3.18.7-3.85-1.35-3.85-1.35-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.25 3.33.95.1-.74.4-1.25.73-1.54-2.54-.29-5.21-1.27-5.21-5.65 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.11 1.17a10.8 10.8 0 0 1 5.68 0c2.16-1.48 3.11-1.17 3.11-1.17.62 1.57.23 2.73.11 3.02a4.42 4.42 0 0 1 1.18 3.07c0 4.39-2.68 5.35-5.23 5.64.41.36.78 1.06.78 2.14v3.17c0 .31.21.66.79.55A11.3 11.3 0 0 0 12 .7Z"/></svg>
+            <div class="hero-toolbar">
+                <button id="languageToggle" class="language-toggle" type="button" aria-label="Switch popup language">
+                    <span class="language-option" data-language="en">EN</span>
+                    <span class="language-option" data-language="fa">فا</span>
                 </button>
+
+                <h1 id="app-title">RTL Fixancer</h1>
+
+                <div class="hero-actions">
+                    <button id="donateButton" class="icon-button donate" type="button" aria-label="Copy donation address" title="Copy donation address">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 20.5S4 16 4 9.8A4.3 4.3 0 0 1 8.35 5.5 4.6 4.6 0 0 1 12 7.25 4.6 4.6 0 0 1 15.65 5.5 4.3 4.3 0 0 1 20 9.8C20 16 12 20.5 12 20.5Z"/>
+                        </svg>
+                    </button>
+                    <button id="githubButton" class="icon-button github" type="button" aria-label="Open GitHub repository" title="GitHub">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 .7a11.3 11.3 0 0 0-3.57 22c.57.1.78-.24.78-.55v-2.18c-3.18.7-3.85-1.35-3.85-1.35-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.25 3.33.95.1-.74.4-1.25.73-1.54-2.54-.29-5.21-1.27-5.21-5.65 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.11 1.17a10.8 10.8 0 0 1 5.68 0c2.16-1.48 3.11-1.17 3.11-1.17.62 1.57.23 2.73.11 3.02a4.42 4.42 0 0 1 1.18 3.07c0 4.39-2.68 5.35-5.23 5.64.41.36.78 1.06.78 2.14v3.17c0 .31.21.66.79.55A11.3 11.3 0 0 0 12 .7Z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div id="connectionStatus" class="status-pill disconnected" role="status" aria-live="polite">
+                <span class="status-dot" aria-hidden="true"></span>
+                <span id="statusText">Status: Disconnected · site disabled</span>
             </div>
         </header>
 
         <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
 
-        <section class="card site-card" aria-labelledby="site-heading">
-            <div class="section-heading">
-                <div>
-                    <p class="section-label" id="site-heading">Current site</p>
-                    <p id="currentSite" class="site-name">Loading…</p>
+        <section class="card" aria-labelledby="site-heading">
+            <div class="card-heading">
+                <div class="title-group">
+                    <span class="section-icon globe" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3c2.2 2.35 3.4 5.35 3.4 9S14.2 18.65 12 21M12 3C9.8 5.35 8.6 8.35 8.6 12S9.8 18.65 12 21"/></svg>
+                    </span>
+                    <h2 id="site-heading">Current site</h2>
                 </div>
-                <label class="switch" aria-label="Enable RTL Fixancer on the current site">
-                    <input id="siteToggle" type="checkbox" disabled>
-                    <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-                </label>
+                <button id="printButton" class="button primary compact-button" type="button" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z"/></svg>
+                    <span>PDF</span>
+                </button>
             </div>
-            <p id="siteHint" class="hint">Open an HTTP or HTTPS page to use the extension.</p>
-            <div class="button-row">
-                <button id="reapplyButton" class="button secondary" type="button" disabled>Re-apply</button>
-                <button id="printButton" class="button secondary" type="button" disabled>Print / PDF</button>
+
+            <div class="site-panel">
+                <p id="currentSite" class="site-name">Loading…</p>
+                <p id="siteHint" class="site-hint">Enable access for this site only.</p>
+                <div class="site-controls">
+                    <div class="activation-control">
+                        <span id="activeLabel" class="control-label">Inactive</span>
+                        <label class="switch" aria-label="Enable RTL Fixancer on the current site">
+                            <input id="siteToggle" type="checkbox" disabled>
+                            <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                        </label>
+                    </div>
+                    <button id="reapplyButton" class="button secondary" type="button" disabled>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
+                        <span>Re-apply</span>
+                    </button>
+                </div>
             </div>
         </section>
 
         <section class="card" aria-labelledby="appearance-heading">
-            <div class="section-heading compact">
-                <h2 id="appearance-heading">Appearance</h2>
+            <div class="card-heading settings-heading">
+                <div class="title-group">
+                    <span class="section-icon settings" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M8 15v4"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+                    </span>
+                    <h2 id="appearance-heading">Settings</h2>
+                </div>
             </div>
+
             <div class="field-grid">
                 <label class="field">
                     <span>Font</span>
                     <select id="fontSelect">
                         <option value="vazir">Vazir</option>
                         <option value="shabnam">Shabnam</option>
-                        <option value="default">Website default</option>
+                        <option value="default">Default</option>
                     </select>
                 </label>
                 <label class="field">
                     <span>Size</span>
                     <select id="fontSizeSelect">
-                        <option value="default">Website default</option>
+                        <option value="default">Default</option>
                         <option value="small">Small</option>
                         <option value="medium">Medium</option>
                         <option value="large">Large</option>
                     </select>
                 </label>
+                <label class="field">
+                    <span>Sensitivity</span>
+                    <select id="detectionModeSelect">
+                        <option value="strict">Strict</option>
+                        <option value="balanced">Medium</option>
+                        <option value="relaxed">Relaxed</option>
+                    </select>
+                </label>
             </div>
-            <label class="field full-width">
-                <span>Detection</span>
-                <select id="detectionModeSelect">
-                    <option value="strict">Strict</option>
-                    <option value="balanced">Balanced</option>
-                    <option value="relaxed">Relaxed</option>
-                </select>
-            </label>
         </section>
 
         <section class="card" aria-labelledby="sites-heading">
-            <div class="section-heading compact">
-                <h2 id="sites-heading">Enabled sites</h2>
-                <span id="sitesCount" class="count">0</span>
+            <div class="card-heading sites-heading">
+                <div class="title-group">
+                    <span class="section-icon sites" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M7 6h13M7 12h13M7 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
+                    </span>
+                    <h2 id="sites-heading">Sites</h2>
+                    <span id="sitesCount" class="count">0</span>
+                </div>
             </div>
             <div id="sitesList" class="sites-list" aria-live="polite"></div>
         </section>
 
         <footer class="footer">
-            <label class="language-control">
-                <span class="sr-only">Popup language</span>
-                <select id="languageSelect" aria-label="Popup language">
-                    <option value="en">English</option>
-                    <option value="fa">فارسی</option>
-                </select>
-            </label>
-            <span>Runs only on sites you enable.</span>
+            <span>Changes are applied immediately.</span>
         </footer>
     </main>
 
