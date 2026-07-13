@@ -1,127 +1,78 @@
-## RTL Fixancer
+# RTL Fixancer
 
-Smart RTL typography enhancement for Chrome. RTL Fixancer detects right-to-left text per element, fixes direction/alignment, applies readable fonts, and keeps mixed English + RTL content usable across modern web apps.
+RTL Fixancer is a private, per-site Chrome extension that improves Persian, Arabic, and Hebrew typography without sending page content anywhere.
 
-![RTL Fixancer English Popup](images/popup-english.svg)
+## What changed in 4.0
 
-[فارسی / Persian README](README.fa.md)
+Version 4.0 replaces the legacy all-site runtime with a permission-first architecture:
 
-### Highlights
+- No static `<all_urls>` content script.
+- No permanent access to every website at install time.
+- Chrome asks for access only when the user enables a site.
+- Content scripts are registered dynamically for enabled domains.
+- Only the top frame is processed.
+- One event-driven `MutationObserver` replaces recurring DOM polling.
+- Every changed attribute is captured and restored when the site is disabled.
+- Legacy patch files and runtime monkey-patching have been removed.
+- Print / Save as PDF uses the browser's native print flow and no longer scrolls through infinite pages.
 
-- **Multilingual RTL support**: Persian/Farsi, Arabic, and Hebrew are registered through separate language modules.
-- **Shared language engine**: `rtl-common.js` provides reusable detection and typography helpers so language configs stay small and duplicated logic is avoided.
-- **English popup UI by default**: The extension popup now opens in English by default, with UI text centralized in `ui-i18n.js`.
-- **Works everywhere**: Enable the current site from the popup or context menu. Core text enhancement works on any normal `http`/`https` page.
-- **AI chat optimized**: Improved handling for ChatGPT, Perplexity, Google AI Studio, Gemini, DeepSeek, and similar chat interfaces.
-- **Mixed text friendly**: Handles English + RTL paragraphs, lists, and dynamically generated content without forcing code blocks or protected structural UI.
-- **Font-aware**: Uses bundled Vazir/Shabnam for Persian and system fallback stacks suitable for Arabic and Hebrew.
-- **One-click PDF**: Use the popup or context menu to open a print-ready view and save content as PDF.
-- **MV3 hardening**: Uses Manifest V3, avoids broad `host_permissions`, and guards scripting actions to supported tab URLs.
+## Features
 
-### Supported RTL languages
+- Persian, Arabic, and Hebrew detection.
+- Safe handling of mixed RTL/LTR text.
+- Vazir, Shabnam, or the website's own font.
+- Adjustable font size and detection sensitivity.
+- Per-site permissions and enabled-site management.
+- Optimized adapters for ChatGPT, Gemini, Google AI Studio, Perplexity, and DeepSeek.
+- Code blocks and host navigation controls remain LTR.
+- English and Persian popup UI.
 
-| Language | Module | Notes |
-| --- | --- | --- |
-| Persian / Farsi | `rtl-common.js` | Uses Vazir/Shabnam and Persian-specific detection helpers. |
-| Arabic | `languages/arabic.js` | Uses Arabic-friendly system font fallbacks. |
-| Hebrew | `languages/hebrew.js` | Uses Hebrew Unicode ranges and Hebrew-friendly font fallbacks. |
+## Install for development
 
-### Works on all websites
-
-RTL Fixancer works on any normal website you visit. Enable it for the current site using the popup toggle or the right-click context menu. The extension is especially useful for AI chat UIs where Persian, Arabic, Hebrew, and English often appear in the same answer.
-
-Enhanced support is targeted for:
-
-- `chat.openai.com` / `chatgpt.com`
-- `perplexity.ai`
-- `aistudio.google.com` / `makersuite.google.com`
-- `gemini.google.com`
-- `deepseek.com`
-- Any other website with RTL text
-
-## Install
-
-### Chrome Web Store
-
-Coming soon.
-
-### Manual developer install
-
-1. Download or clone this repository.
-2. Open Chrome and go to `chrome://extensions`.
+1. Clone or download this repository.
+2. Open `chrome://extensions`.
 3. Enable **Developer mode**.
-4. Click **Load unpacked** and select the repository root folder that contains `manifest.json`.
-5. Pin the extension, open a website, and enable that site from the popup.
+4. Select **Load unpacked** and choose the repository root.
+5. Open a normal HTTP/HTTPS page, click RTL Fixancer, and enable that site.
 
-## Usage
+Chrome 120 or newer is required.
 
-- Toggle the current site from the popup.
-- Pick a font: `Vazir`, `Shabnam`, or browser default.
-- Adjust detection sensitivity.
-- Click **PDF** to use the browser print dialog and save the page/chat as a PDF.
-- Use the right-click context menu for quick actions: toggle site, re-apply, export PDF.
+## Verification
 
-## Permissions
+Node.js 22 or newer is required for repository checks.
 
-- `storage`: saves settings such as font, size, detection mode, UI language, and enabled sites.
-- `activeTab`, `scripting`: run the content script only for supported user-triggered actions.
-- `tabs`, `contextMenus`: update extension icon state and provide right-click actions.
+```bash
+npm run check
+```
 
-The manifest does **not** request broad `host_permissions`. The content script still runs on matched pages, but the extension behavior is controlled by the sites you enable.
+This runs manifest/source validation and the core unit tests. After runtime changes, also verify the extension manually in Chrome on a generic page and each supported AI chat UI.
 
-## Privacy
+## Privacy and security
 
-- No analytics.
-- No external servers.
-- No user text is sent anywhere.
-- Processing happens locally in your browser.
-- Bundled fonts are loaded from the extension package, not from the network.
-- PDF export uses the browser/system print dialog.
+RTL Fixancer works locally. It does not include analytics, remote code, network APIs, or page-content uploads. Host access is optional and requested only for domains explicitly enabled by the user.
 
-## Architecture
+The only web-accessible files are the bundled Vazir and Shabnam font files.
 
-- **Shared RTL helpers**: `rtl-common.js`
-- **Language modules**: `languages/arabic.js`, `languages/hebrew.js`
-- **Core content engine**: `content.js`
-- **Compatibility patches**: `content-patch.js`, `content-rtl-upgrade.js`
-- **Background service worker**: `background.js`
-- **Popup UI**: `popup.html`, `popup.js`, `popup-patch.js`
-- **UI translations**: `ui-i18n.js`
-- **PDF helper**: `lib/print-helper.js`
+## Project structure
 
-## Development notes
-
-- Manifest V3 extension.
-- Content scripts run at `document_start`.
-- Uses `MutationObserver` and `requestIdleCallback` for late/dynamic content.
-- Skips code/pre/input/textarea zones to avoid damaging code blocks and editable controls.
-- Site activation is subdomain-aware.
-- Popup UI language defaults to English via `ui-i18n.js`.
-
-## Roadmap
-
-- Optional UI language switcher inside the popup.
-- More site-specific profiles for complex productivity apps.
-- Debug overlay for processed RTL elements.
-- Optional import/export for settings.
-
-## Contributing
-
-Issues and PRs are welcome. Please include the URL, browser version, screenshots, and a short before/after description when reporting layout or detection bugs.
+```text
+background.js        Permission, registration, context-menu, and icon controller
+content.js           Reversible, event-driven page runtime
+lib/core.js          Shared settings, domain, and language-detection logic
+popup.html/css/js    Accessible extension popup
+scripts/validate.mjs Repository architecture and security validation
+tests/               Node unit tests
+docs/extension-audit.md Architecture and release verification notes
+```
 
 ## License
 
-CC BY-NC-ND 4.0 — see `LICENSE`.
+See [LICENSE](LICENSE).
 
 ## Donate
 
-If this project helps you, consider a small donation. Thank you!
+If this project helps you, donations are welcome:
 
+```text
+0x5ba08cc1429bead9c07dc2030b881c6ed33c3a00
 ```
-Wallet: 0x5ba08cc1429bead9c07dc2030b881c6ed33c3a00
-```
-
-## Links
-
-- GitHub: https://github.com/Nishef1/RTL-Fixancer
-- فارسی / Persian: [README.fa.md](README.fa.md)
