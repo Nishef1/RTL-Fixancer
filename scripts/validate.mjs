@@ -8,7 +8,7 @@ const read = relative => readFile(path.join(root, relative), 'utf8');
 const manifest = JSON.parse(await read('manifest.json'));
 
 assert.equal(manifest.manifest_version, 3, 'Manifest V3 is required.');
-assert.equal(manifest.version, '4.1.0');
+assert.equal(manifest.version, '4.1.1');
 assert.equal(manifest.background?.service_worker, 'background.js');
 assert.equal(manifest.content_scripts, undefined, 'Static all-site content scripts are forbidden.');
 assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
@@ -46,6 +46,12 @@ assert(content.includes('MutationObserver'), 'The content runtime must be event 
 assert(content.includes("attributeFilter: ['class', 'role', 'aria-hidden', 'contenteditable']"), 'Relevant host UI attribute changes must be observed.');
 assert(!content.includes('setInterval('), 'The content runtime must not use polling intervals.');
 assert(content.includes('restoreAll()'), 'DOM mutations must be reversible.');
+assert(!content.includes('unicode-bidi: plaintext'), 'RTL paragraphs must not derive their base direction from a leading Latin token.');
+assert(content.includes('unicode-bidi: isolate !important;'), 'Mixed-direction text must use an isolated forced RTL base direction.');
+assert(content.includes("const LIST_ATTR = 'data-rtl-fixancer-list';"), 'RTL list containers require reversible runtime state.');
+assert(content.includes('list-style-position: outside !important;'), 'Ordered-list markers must stay outside RTL content.');
+assert(content.includes('> li::marker'), 'RTL list markers require dedicated bidi styling.');
+assert(content.includes("const LTR_ATTR = 'data-rtl-fixancer-ltr';"), 'Short Latin inline tokens inside RTL blocks must be isolated.');
 
 const popupHtml = await read('popup.html');
 const popupCss = await read('popup.css');
@@ -59,4 +65,4 @@ assert(popupCss.includes('grid-template-columns: repeat(3, minmax(0, 1fr))'), 'S
 assert(!popupJs.includes('innerHTML'), 'Popup DOM must not be assembled with innerHTML.');
 assert(popupJs.includes('createTrashIcon'), 'Dynamic site actions must use the shared SVG icon builder.');
 
-console.log('Validation passed: manifest, permissions, runtime, popup design, and source safety checks are valid.');
+console.log('Validation passed: permissions, bidi isolation, RTL lists, popup design, and source safety checks are valid.');
