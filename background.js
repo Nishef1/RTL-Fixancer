@@ -157,10 +157,7 @@ async function updateIcon(tabId, hostname, settings = null) {
 async function removeUnusedHostPermission(hostname, remainingSites) {
     const host = Core.normalizeHostname(hostname);
     if (!host) return false;
-    const stillCovered = remainingSites.some(site => {
-        const normalized = Core.normalizeHostname(site);
-        return normalized === host || normalized.endsWith(`.${host}`) || host.endsWith(`.${normalized}`);
-    });
+    const stillCovered = remainingSites.some(site => Core.normalizeHostname(site) === host);
     if (stillCovered) return false;
     try {
         return await chrome.permissions.remove({ origins: Core.matchPatternsForHost(host) });
@@ -275,19 +272,23 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-    void (async () => {
-        if (!tab?.id || !Core.isSupportedUrl(tab.url || '')) return;
-        const hostname = new URL(tab.url).hostname;
+    if (!tab?.id || !Core.isSupportedUrl(tab.url || '')) return;
+    const hostname = new URL(tab.url).hostname;
 
-        if (info.menuItemId === 'rtl-fixancer-toggle') {
+    if (info.menuItemId === 'rtl-fixancer-toggle') {
+        const origins = Core.matchPatternsForHost(hostname);
+        const previousPermission = chrome.permissions.contains({ origins });
+        const permissionRequest = chrome.permissions.request({ origins });
+        void Promise.all([previousPermission, permissionRequest]).then(async ([hadPermission, granted]) => {
+            if (!granted) return;
             const status = await getSiteStatus(hostname);
-            if (!status.enabled && !status.permissionGranted) {
-                const granted = await chrome.permissions.request({ origins: Core.matchPatternsForHost(hostname) });
-                if (!granted) return;
-            }
-            await setSiteEnabled({ hostname, enabled: !status.enabled, tabId: tab.id });
-            return;
-        }
+            const enable = hadPermission ? !status.enabled : true;
+            await setSiteEnabled({ hostname, enabled: enable, tabId: tab.id });
+        }).catch(error => console.error('RTL Fixancer context-menu toggle failed:', error));
+        return;
+    }
+
+    void (async () => {
         if (info.menuItemId === 'rtl-fixancer-reapply') {
             await reapply(tab.id, hostname);
             return;
@@ -324,4 +325,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'sync' || !changes[STORAGE_KEY]) return;
     void syncRegistrations(Core.normalizeSettings(changes[STORAGE_KEY].newValue))
         .catch(error => console.error('RTL Fixancer registration sync failed:', error));
+});
+
+chrome.permissions.onAdded.addListener(() => {
+    void syncRegistrations().catch(error => console.error('RTL Fixancer permission sync failed:', error));
+});
+
+chrome.permissions.onRemoved.addListener(() => {
+    void syncRegistrations().catch(error => console.error('RTL Fixancer permission sync failed:', error));
 });
