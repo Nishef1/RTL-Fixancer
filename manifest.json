@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RTL Fixancer",
-  "version": "4.1.1",
+  "version": "4.1.2",
   "description": "Private, per-site RTL typography enhancement for Persian, Arabic, and Hebrew text.",
   "author": "Nishef1",
   "homepage_url": "https://github.com/Nishef1/RTL-Fixancer",
