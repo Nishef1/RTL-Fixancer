@@ -52,6 +52,7 @@ assert(content.includes("const LIST_ATTR = 'data-rtl-fixancer-list';"), 'RTL lis
 assert(content.includes('list-style-position: outside !important;'), 'Ordered-list markers must stay outside RTL content.');
 assert(content.includes('> li::marker'), 'RTL list markers require dedicated bidi styling.');
 assert(content.includes("const LTR_ATTR = 'data-rtl-fixancer-ltr';"), 'Short Latin inline tokens inside RTL blocks must be isolated.');
+assert(content.includes('enqueueCandidateAndBlock'), 'Streaming inline changes must also reclassify their parent text block.');
 
 const popupHtml = await read('popup.html');
 const popupCss = await read('popup.css');
@@ -65,4 +66,4 @@ assert(popupCss.includes('grid-template-columns: repeat(3, minmax(0, 1fr))'), 'S
 assert(!popupJs.includes('innerHTML'), 'Popup DOM must not be assembled with innerHTML.');
 assert(popupJs.includes('createTrashIcon'), 'Dynamic site actions must use the shared SVG icon builder.');
 
-console.log('Validation passed: permissions, bidi isolation, RTL lists, popup design, and source safety checks are valid.');
+console.log('Validation passed: permissions, bidi isolation, streaming, RTL lists, popup design, and source safety checks are valid.');
