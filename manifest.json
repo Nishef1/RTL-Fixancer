@@ -1,64 +1,50 @@
 {
-    "manifest_version": 3,
-    "name": "RTL Fixancer",
-    "version": "3.5",
-    "description": "Smart RTL typography enhancement for Persian, Arabic, Hebrew, and other right-to-left text.",
-    "author": "Nishef1",
-    "homepage_url": "https://github.com/Nishef1/RTL-Fixancer",
-    "minimum_chrome_version": "88",
-    "icons": {
-        "16": "images/RTL-on-16.png",
-        "32": "images/RTL-on-32.png",
-        "48": "images/RTL-on-48.png",
-        "128": "images/RTL-on-128.png"
-    },
-    "permissions": [
-        "storage",
-        "activeTab",
-        "scripting",
-        "contextMenus",
-        "tabs"
-    ],
-    "action": {
-        "default_popup": "popup.html",
-        "default_title": "RTL Fixancer",
-        "default_icon": {
-            "16": "images/RTL-on-16.png",
-            "32": "images/RTL-on-32.png",
-            "48": "images/RTL-on-48.png",
-            "128": "images/RTL-on-128.png"
-        }
-    },
-    "content_scripts": [
-        {
-            "matches": [
-                "<all_urls>"
-            ],
-            "js": [
-                "rtl-common.js",
-                "languages/arabic.js",
-                "languages/hebrew.js",
-                "content.js",
-                "content-patch.js",
-                "content-rtl-upgrade.js",
-                "content-ui-guard.js"
-            ],
-            "run_at": "document_start",
-            "all_frames": true
-        }
-    ],
-    "web_accessible_resources": [
-        {
-            "resources": [
-                "vazir.woff2",
-                "shabnam.woff2"
-            ],
-            "matches": [
-                "<all_urls>"
-            ]
-        }
-    ],
-    "background": {
-        "service_worker": "background.js"
+  "manifest_version": 3,
+  "name": "RTL Fixancer",
+  "version": "4.0.0",
+  "description": "Private, per-site RTL typography enhancement for Persian, Arabic, and Hebrew text.",
+  "author": "Nishef1",
+  "homepage_url": "https://github.com/Nishef1/RTL-Fixancer",
+  "minimum_chrome_version": "120",
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "scripting",
+    "storage"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "RTL Fixancer",
+    "default_icon": {
+      "16": "images/RTL-off-16.png",
+      "32": "images/RTL-off-32.png",
+      "48": "images/RTL-off-48.png",
+      "128": "images/RTL-off-128.png"
     }
+  },
+  "icons": {
+    "16": "images/RTL-on-16.png",
+    "32": "images/RTL-on-32.png",
+    "48": "images/RTL-on-48.png",
+    "128": "images/RTL-on-128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "vazir.woff2",
+        "shabnam.woff2"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
+    }
+  ]
 }
