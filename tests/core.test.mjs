@@ -16,10 +16,19 @@ test('normalizes hostnames and rejects invalid values', () => {
     assert.equal(Core.normalizeHostname('*.example.com'), '');
 });
 
-test('builds an exact-host match pattern', () => {
-    assert.deepEqual([...Core.matchPatternsForHost('example.com')], ['*://example.com/*']);
-    assert.deepEqual([...Core.matchPatternsForHost('localhost')], ['*://localhost/*']);
-    assert.deepEqual([...Core.matchPatternsForHost('127.0.0.1')], ['*://127.0.0.1/*']);
+test('builds manifest-compatible exact-host patterns for both schemes', () => {
+    assert.deepEqual([...Core.matchPatternsForHost('example.com')], [
+        'http://example.com/*',
+        'https://example.com/*'
+    ]);
+    assert.deepEqual([...Core.matchPatternsForHost('localhost')], [
+        'http://localhost/*',
+        'https://localhost/*'
+    ]);
+    assert.deepEqual([...Core.matchPatternsForHost('127.0.0.1')], [
+        'http://127.0.0.1/*',
+        'https://127.0.0.1/*'
+    ]);
 });
 
 test('matches only the exact enabled hostname', () => {
