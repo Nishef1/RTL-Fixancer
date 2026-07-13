@@ -120,6 +120,7 @@
             this.attachListeners();
             this.scan(document);
             this.scanEditors(document);
+            this.notifyState(true);
             return true;
         }
 
@@ -135,7 +136,15 @@
             this.attachListeners();
             this.scan(document);
             this.scanEditors(document);
+            this.notifyState(true);
             return true;
+        }
+
+        notifyState(active) {
+            try {
+                const response = chrome.runtime.sendMessage({ type: 'runtime:state', active: Boolean(active) });
+                response?.catch?.(() => {});
+            } catch (_) {}
         }
 
         attachListeners() {
@@ -467,6 +476,7 @@
             this.restoreAll();
             this.styleElement?.remove();
             this.styleElement = null;
+            this.notifyState(false);
 
             if (!keepRuntimeListeners) {
                 chrome.runtime.onMessage.removeListener(this.onMessage);
