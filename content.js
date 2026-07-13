@@ -145,7 +145,9 @@
             this.observer.observe(target, {
                 subtree: true,
                 childList: true,
-                characterData: true
+                characterData: true,
+                attributes: true,
+                attributeFilter: ['class', 'role', 'aria-hidden', 'contenteditable']
             });
 
             document.addEventListener('input', this.onInput, true);
@@ -174,14 +176,14 @@
                     src: url('${vazirUrl}') format('woff2');
                     font-display: swap;
                     font-style: normal;
-                    font-weight: 100 900;
+                    font-weight: normal;
                 }
                 @font-face {
                     font-family: 'RTLFixancerShabnam';
                     src: url('${shabnamUrl}') format('woff2');
                     font-display: swap;
                     font-style: normal;
-                    font-weight: 100 900;
+                    font-weight: normal;
                 }
                 [${MARK_ATTR}="rtl"], [${INPUT_ATTR}="rtl"] {
                     direction: rtl !important;
@@ -210,6 +212,15 @@
         onMutation(mutations) {
             if (!this.active) return;
             for (const mutation of mutations) {
+                if (mutation.type === 'attributes') {
+                    const element = mutation.target;
+                    if (element?.matches?.(CANDIDATE_SELECTOR)) this.enqueue(element);
+                    const candidate = element?.closest?.(CANDIDATE_SELECTOR);
+                    if (candidate && candidate !== element) this.enqueue(candidate);
+                    if (element?.matches?.(EDITABLE_SELECTOR)) this.processEditor(element);
+                    continue;
+                }
+
                 if (mutation.type === 'characterData') {
                     const parent = mutation.target.parentElement;
                     const candidate = parent?.closest?.(CANDIDATE_SELECTOR);
@@ -403,6 +414,8 @@
             const snapshot = this.originalState.get(element);
             if (!snapshot) return;
             for (const [name, state] of Object.entries(snapshot)) {
+                // Do not overwrite a direction change made by the host after our mutation.
+                if (name === 'dir' && element.getAttribute('dir') !== 'rtl') continue;
                 if (state.present) element.setAttribute(name, state.value ?? '');
                 else element.removeAttribute(name);
             }
