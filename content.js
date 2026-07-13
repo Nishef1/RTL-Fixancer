@@ -14,12 +14,19 @@
     const MARK_ATTR = 'data-rtl-fixancer';
     const LANGUAGE_ATTR = 'data-rtl-fixancer-language';
     const INPUT_ATTR = 'data-rtl-fixancer-input';
-    const CANDIDATE_SELECTOR = [
+    const LIST_ATTR = 'data-rtl-fixancer-list';
+    const LTR_ATTR = 'data-rtl-fixancer-ltr';
+
+    const BLOCK_SELECTOR = [
         'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th',
-        'blockquote', 'figcaption', 'caption', 'summary', 'cite', 'q', 'em',
-        'strong', 'b', 'i', 'u', 'mark', 'small', 'del', 'ins', 'sub', 'sup',
-        'time', 'abbr', 'dd', 'dt', 'address', 'output', 'span', 'a'
+        'blockquote', 'figcaption', 'caption', 'summary', 'dd', 'dt', 'address', 'output'
     ].join(',');
+    const INLINE_SELECTOR = [
+        'span', 'a', 'cite', 'q', 'em', 'strong', 'b', 'i', 'u', 'mark',
+        'small', 'del', 'ins', 'sub', 'sup', 'time', 'abbr'
+    ].join(',');
+    const CANDIDATE_SELECTOR = `${BLOCK_SELECTOR},${INLINE_SELECTOR}`;
+    const LIST_SELECTOR = 'ol, ul, [role="list"]';
     const EDITABLE_SELECTOR = [
         'textarea',
         'input:not([type])',
@@ -83,12 +90,8 @@
             this.originalState = new WeakMap();
             this.touchedElements = new Set();
             this.signatures = new WeakMap();
-            this.stats = {
-                processed: 0,
-                restored: 0,
-                queued: 0,
-                errors: 0
-            };
+            this.stats = { processed: 0, restored: 0, queued: 0, errors: 0 };
+
             this.onInput = this.onInput.bind(this);
             this.onMutation = this.onMutation.bind(this);
             this.onMessage = this.onMessage.bind(this);
@@ -148,10 +151,9 @@
         }
 
         attachListeners() {
-            if (this.observer) this.observer.disconnect();
+            this.observer?.disconnect();
             this.observer = new MutationObserver(this.onMutation);
-            const target = document.documentElement || document;
-            this.observer.observe(target, {
+            this.observer.observe(document.documentElement || document, {
                 subtree: true,
                 childList: true,
                 characterData: true,
@@ -178,6 +180,12 @@
                 large: '1.125em'
             }[this.settings.fontSize] || 'inherit';
             const fontStack = Core.fontStack(this.settings.selectedFont, 'ar');
+            const fontRule = this.settings.selectedFont === 'default'
+                ? ''
+                : `font-family: ${fontStack} !important;`;
+            const sizeRule = this.settings.fontSize === 'default'
+                ? ''
+                : `font-size: ${fontSize} !important;`;
 
             style.textContent = `
                 @font-face {
@@ -197,20 +205,41 @@
                 [${MARK_ATTR}="rtl"], [${INPUT_ATTR}="rtl"] {
                     direction: rtl !important;
                     text-align: right !important;
-                    unicode-bidi: plaintext !important;
-                    ${this.settings.selectedFont === 'default' ? '' : `font-family: ${fontStack} !important;`}
-                    ${this.settings.fontSize === 'default' ? '' : `font-size: ${fontSize} !important;`}
+                    unicode-bidi: isolate !important;
+                    ${fontRule}
+                    ${sizeRule}
                 }
-                [${MARK_ATTR}="rtl"] :is(pre, code, kbd, samp, [class*="codeblock" i], [class*="code-block" i]) {
+                [${LTR_ATTR}="true"] {
+                    direction: ltr !important;
+                    unicode-bidi: isolate !important;
+                }
+                [${LIST_ATTR}="rtl"] {
+                    direction: rtl !important;
+                    text-align: right !important;
+                    padding-inline-start: 1.55em !important;
+                    padding-inline-end: 0 !important;
+                    padding-left: 0 !important;
+                    padding-right: 1.55em !important;
+                    list-style-position: outside !important;
+                }
+                [${LIST_ATTR}="rtl"] > li {
+                    direction: rtl !important;
+                    text-align: right !important;
+                    unicode-bidi: isolate !important;
+                }
+                [${LIST_ATTR}="rtl"] > li::marker {
+                    direction: rtl;
+                    unicode-bidi: isolate;
+                    font-variant-numeric: tabular-nums;
+                }
+                [${MARK_ATTR}="rtl"] :is(pre, code, kbd, samp, [class*="codeblock" i], [class*="code-block" i]),
+                [${MARK_ATTR}="rtl"] :is(bdi, [dir="ltr"]) {
                     direction: ltr !important;
                     text-align: left !important;
                     unicode-bidi: isolate !important;
-                    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
                 }
-                :is(ol, ul, [role="list"]):has(> [${MARK_ATTR}="rtl"]) {
-                    direction: rtl;
-                    padding-inline-start: 1.5em;
-                    padding-inline-end: 0;
+                [${MARK_ATTR}="rtl"] :is(pre, code, kbd, samp, [class*="codeblock" i], [class*="code-block" i]) {
+                    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
                 }
             `;
 
@@ -256,15 +285,13 @@
         scan(root) {
             if (!this.active || !root) return;
             if (root.nodeType === Node.ELEMENT_NODE && root.matches?.(CANDIDATE_SELECTOR)) this.enqueue(root);
-            const elements = root.querySelectorAll?.(CANDIDATE_SELECTOR) || [];
-            for (const element of elements) this.enqueue(element);
+            for (const element of root.querySelectorAll?.(CANDIDATE_SELECTOR) || []) this.enqueue(element);
         }
 
         scanEditors(root) {
             if (!this.active || !root) return;
             if (root.nodeType === Node.ELEMENT_NODE && root.matches?.(EDITABLE_SELECTOR)) this.processEditor(root);
-            const editors = root.querySelectorAll?.(EDITABLE_SELECTOR) || [];
-            for (const editor of editors) this.processEditor(editor);
+            for (const editor of root.querySelectorAll?.(EDITABLE_SELECTOR) || []) this.processEditor(editor);
         }
 
         enqueue(element) {
@@ -313,8 +340,7 @@
             if (!this.isInContentArea(element)) return true;
 
             const className = typeof element.className === 'string' ? element.className.toLowerCase() : '';
-            if (/\b(sidebar|navbar|topbar|toolbar|breadcrumb|pagination|composer-actions?)\b/.test(className)) return true;
-            return false;
+            return /\b(sidebar|navbar|topbar|toolbar|breadcrumb|pagination|composer-actions?)\b/.test(className);
         }
 
         getText(element) {
@@ -340,6 +366,15 @@
             return `${this.settings.detectionMode}|${result.direction}|${result.language || ''}|${text}`;
         }
 
+        isInlineElement(element) {
+            return element.matches?.(INLINE_SELECTOR) || false;
+        }
+
+        rtlBlockAncestor(element) {
+            const ancestor = element.parentElement?.closest?.(`[${MARK_ATTR}="rtl"]`);
+            return ancestor?.matches?.(BLOCK_SELECTOR) ? ancestor : null;
+        }
+
         processElement(element) {
             try {
                 if (this.shouldSkip(element)) {
@@ -353,18 +388,61 @@
                 if (this.signatures.get(element) === signature) return;
                 this.signatures.set(element, signature);
 
+                const rtlAncestor = this.rtlBlockAncestor(element);
+                if (this.isInlineElement(element) && rtlAncestor) {
+                    if (result.direction === 'ltr' && result.rtlCount === 0 && result.ltrCount > 0 && text.length <= 160) {
+                        this.markLtrInline(element);
+                    } else {
+                        this.restoreElement(element);
+                    }
+                    return;
+                }
+
                 if (result.direction !== 'rtl') {
                     this.restoreElement(element);
                     return;
                 }
 
                 this.captureElement(element);
+                element.removeAttribute(LTR_ATTR);
                 element.setAttribute(MARK_ATTR, 'rtl');
                 element.setAttribute(LANGUAGE_ATTR, result.language || 'ar');
                 element.setAttribute('dir', 'rtl');
                 this.stats.processed += 1;
+
+                const list = element.closest(LIST_SELECTOR);
+                if (list) this.syncListContainer(list);
             } catch (_) {
                 this.stats.errors += 1;
+            }
+        }
+
+        markLtrInline(element) {
+            this.captureElement(element);
+            element.removeAttribute(MARK_ATTR);
+            element.removeAttribute(LANGUAGE_ATTR);
+            element.setAttribute(LTR_ATTR, 'true');
+            element.setAttribute('dir', 'ltr');
+        }
+
+        listHasRtlContent(list) {
+            try {
+                return [...list.querySelectorAll(':scope > li')].some(item =>
+                    item.matches(`[${MARK_ATTR}="rtl"]`) || Boolean(item.querySelector(`[${MARK_ATTR}="rtl"]`))
+                );
+            } catch (_) {
+                return Boolean(list.querySelector(`[${MARK_ATTR}="rtl"]`));
+            }
+        }
+
+        syncListContainer(list) {
+            if (!list?.isConnected) return;
+            if (this.listHasRtlContent(list)) {
+                this.captureElement(list);
+                list.setAttribute(LIST_ATTR, 'rtl');
+                list.setAttribute('dir', 'rtl');
+            } else if (this.originalState.has(list)) {
+                this.restoreElement(list, { syncList: false });
             }
         }
 
@@ -372,8 +450,7 @@
             if (!element?.matches?.(EDITABLE_SELECTOR)) return false;
             if (element.closest(CODE_ANCESTOR_SELECTOR)) return false;
             if (this.adapter?.editor && !element.matches(this.adapter.editor) && !element.closest(this.adapter.editor)) {
-                const inContent = element.closest(this.adapter.content);
-                if (!inContent) return false;
+                if (!element.closest(this.adapter.content)) return false;
             }
             return true;
         }
@@ -386,8 +463,7 @@
         processEditor(element) {
             if (!this.active || !this.isSupportedEditor(element)) return;
             try {
-                const text = this.editorText(element);
-                const result = Core.classifyText(text, this.settings.detectionMode);
+                const result = Core.classifyText(this.editorText(element), this.settings.detectionMode);
                 if (result.direction !== 'rtl') {
                     this.restoreElement(element);
                     return;
@@ -408,7 +484,7 @@
 
         captureElement(element) {
             if (this.originalState.has(element)) return;
-            const attributes = [MARK_ATTR, LANGUAGE_ATTR, INPUT_ATTR, 'dir'];
+            const attributes = [MARK_ATTR, LANGUAGE_ATTR, INPUT_ATTR, LIST_ATTR, LTR_ATTR, 'dir'];
             const snapshot = {};
             for (const name of attributes) {
                 snapshot[name] = element.hasAttribute(name)
@@ -419,24 +495,28 @@
             this.touchedElements.add(element);
         }
 
-        restoreElement(element) {
+        restoreElement(element, { syncList = true } = {}) {
             const snapshot = this.originalState.get(element);
             if (!snapshot) return;
+            const list = syncList && !element.matches?.(LIST_SELECTOR) ? element.closest?.(LIST_SELECTOR) : null;
+
             for (const [name, state] of Object.entries(snapshot)) {
-                // Do not overwrite a direction change made by the host after our mutation.
-                if (name === 'dir' && element.getAttribute('dir') !== 'rtl') continue;
+                if (name === 'dir' && !['rtl', 'ltr'].includes(element.getAttribute('dir'))) continue;
                 if (state.present) element.setAttribute(name, state.value ?? '');
                 else element.removeAttribute(name);
             }
+
             this.originalState.delete(element);
             this.touchedElements.delete(element);
             this.signatures.delete(element);
             this.stats.restored += 1;
+            if (list) this.syncListContainer(list);
         }
 
         restoreAll() {
-            for (const element of [...this.touchedElements]) {
-                if (element?.isConnected) this.restoreElement(element);
+            const elements = [...this.touchedElements];
+            for (const element of elements) {
+                if (element?.isConnected) this.restoreElement(element, { syncList: false });
                 else {
                     this.touchedElements.delete(element);
                     this.originalState.delete(element);
@@ -496,8 +576,7 @@
 
         onStorageChanged(changes, areaName) {
             if (areaName !== 'sync' || !changes[STORAGE_KEY]) return;
-            const settings = Core.normalizeSettings(changes[STORAGE_KEY].newValue);
-            void this.restart(settings);
+            void this.restart(Core.normalizeSettings(changes[STORAGE_KEY].newValue));
         }
 
         onMessage(message, _sender, sendResponse) {
