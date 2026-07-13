@@ -1,68 +1,56 @@
-# Chrome Extension Audit Notes
+# RTL Fixancer 4.0 Architecture Audit
 
-Date: 2026-06-20
+Date: 2026-07-13
 
-## Current status
+## Security boundary
 
-RTL Fixancer is now a Manifest V3 Chrome extension for multilingual RTL text enhancement. It supports Persian/Farsi, Arabic, and Hebrew through a shared RTL helper and separate language modules.
+- Manifest V3 service worker.
+- No static content scripts.
+- No required host permissions.
+- `optional_host_permissions` are requested only from a popup or context-menu user gesture.
+- Dynamic registrations exist only for enabled sites with granted permissions.
+- Content scripts execute in the isolated world and only in the top frame.
+- No remote code, telemetry, or content upload.
+- Only bundled font files are web accessible.
 
-## Runtime architecture
+## Runtime model
 
-- `manifest.json` loads the full content chain at `document_start`.
-- `rtl-common.js` owns shared RTL language registration and typography helpers.
-- `languages/arabic.js` and `languages/hebrew.js` register extra RTL language configs.
-- `content.js` remains the legacy core engine.
-- `content-patch.js` patches subdomain-aware site matching without broad edits to the legacy core.
-- `content-rtl-upgrade.js` upgrades only safe text-leaf elements and avoids structural layout containers.
-- `content-ui-guard.js` keeps host-app UI controls such as tool-call labels, sidebars, nav items, and composer controls LTR.
-- `ui-i18n.js` centralizes popup UI strings and defaults to English.
-- `background.js` uses the same full content-script chain for fallback injection.
+`content.js` uses one `MutationObserver`, an idle-work queue, and delegated editor events. It contains no interval-based DOM scanning. Candidate elements are text-bearing leaves; structural UI, code, embedded content, and navigation are skipped.
 
-## Fixed issues
+Before setting `dir` or extension data attributes, the runtime records whether each attribute existed and its exact original value. A site disable, settings restart, or runtime cleanup restores that snapshot instead of blindly deleting host-page state.
 
-### 1. Removed broad host permissions
+## Permission lifecycle
 
-The old manifest requested broad `host_permissions`, including `*://*/*`. The current manifest does not request broad host permissions. Runtime behavior is controlled by the user's enabled-site list.
+1. The user opens the popup on an HTTP/HTTPS page.
+2. Enabling the site calls `chrome.permissions.request()` with that host's exact and subdomain match patterns.
+3. The service worker stores the hostname and registers `lib/core.js` plus `content.js` with `chrome.scripting.registerContentScripts()`.
+4. The current tab is injected immediately; future matching navigations use the persistent dynamic registration.
+5. Disabling sends an explicit cleanup message, unregisters the content script, and removes the now-unused host permission.
 
-### 2. Hardened background URL handling
+Unregistering alone is intentionally not treated as cleanup because already-injected scripts and styles remain in the page until explicitly reverted.
 
-The background service worker only attempts scripting and print fallback on supported `http:` and `https:` pages.
+## Automated checks
 
-### 3. Removed unsafe JavaScript URL print fallback
+`npm run check` verifies:
 
-The previous `javascript:window.print()` tab fallback was removed. The remaining fallback uses `chrome.scripting.executeScript({ func: () => window.print() })` on supported pages.
+- manifest structure and permissions;
+- absence of static content scripts and broad `tabs` access;
+- required runtime files;
+- no `eval`, `new Function`, or remote JavaScript;
+- dynamic `document_idle` registration;
+- event-driven observation without `setInterval`;
+- reversible mutation support;
+- domain matching, settings normalization, stable registration IDs, and RTL language classification.
 
-### 4. Fixed stale settings dispatch after context-menu toggle
+## Release checklist
 
-The background toggle now stores the new `enabledSites` list and sends the fresh settings object to the current tab.
-
-### 5. Fixed subdomain mismatch
-
-Background, popup, and content runtime now use subdomain-aware matching so enabling `example.com` can cover `sub.example.com`.
-
-### 6. Added multilingual RTL support
-
-Arabic and Hebrew are registered through separate modules while shared behavior is kept in `rtl-common.js`.
-
-### 7. Prevented over-aggressive RTL on host UI
-
-The generic RTL upgrade no longer targets structural containers such as `div`, `nav`, `header`, `aside`, `button`, sidebars, or topbars. A separate host UI guard forces known UI controls such as `Called tool`, `Thought for`, `Sources`, `Share`, and navigation/sidebar labels to stay LTR.
-
-### 8. Popup UI cleanup
-
-The popup is English by default and dynamic status/empty-state strings are translated through `ui-i18n.js`.
-
-## Manual verification checklist
-
-1. Reload the unpacked extension in `chrome://extensions`.
-2. Hard-refresh ChatGPT after the extension reload.
-3. Confirm the left sidebar, top bar, `Called tool`, and `Thought for` stay LTR.
-4. Confirm Persian assistant/user message text is RTL and readable.
-5. Test Arabic and Hebrew sample text in an AI chat response.
-6. Test popup site toggle, Re-apply, and PDF export on a normal `https://` page.
-7. Test a protected page such as `chrome://extensions` and confirm the extension fails gracefully.
-8. Test subdomain behavior: enable `example.com`, then verify `sub.example.com` inherits the enabled state.
-
-## Remaining caution
-
-`content.js` is still a large legacy file. Future improvements should continue using small, isolated patch files unless the core file is refactored with live browser verification.
+- Run `npm run check` with Node.js 22+.
+- Load unpacked in Chrome 120+.
+- Test permission grant, denial, disable, and re-enable.
+- Confirm an unenabled site receives no content runtime.
+- Confirm exact DOM restoration without page reload.
+- Test Persian, Arabic, Hebrew, mixed text, inputs, code blocks, and lists.
+- Test ChatGPT, Gemini, Google AI Studio, Perplexity, DeepSeek, and a generic site.
+- Test streaming and virtualized/recycled messages.
+- Restart Chrome and verify enabled-site registrations persist.
+- Test popup keyboard navigation, dark mode, RTL popup language, reduced motion, context menus, and Print / Save as PDF.
