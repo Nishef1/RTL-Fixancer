@@ -8,7 +8,7 @@ const read = relative => readFile(path.join(root, relative), 'utf8');
 const manifest = JSON.parse(await read('manifest.json'));
 
 assert.equal(manifest.manifest_version, 3, 'Manifest V3 is required.');
-assert.equal(manifest.version, '4.0.1');
+assert.equal(manifest.version, '4.1.0');
 assert.equal(manifest.background?.service_worker, 'background.js');
 assert.equal(manifest.content_scripts, undefined, 'Static all-site content scripts are forbidden.');
 assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
@@ -47,4 +47,16 @@ assert(content.includes("attributeFilter: ['class', 'role', 'aria-hidden', 'cont
 assert(!content.includes('setInterval('), 'The content runtime must not use polling intervals.');
 assert(content.includes('restoreAll()'), 'DOM mutations must be reversible.');
 
-console.log('Validation passed: manifest, permissions, runtime architecture, and source safety checks are valid.');
+const popupHtml = await read('popup.html');
+const popupCss = await read('popup.css');
+const popupJs = await read('popup.js');
+assert(popupHtml.includes('id="languageToggle"'), 'The compact header language switch is required.');
+assert(!popupHtml.includes('id="languageSelect"'), 'The old footer language select must not return.');
+assert(popupHtml.includes('class="section-icon'), 'Popup sections must use a consistent SVG icon system.');
+assert(!/[🌐⚙️📋🗑️]/u.test(popupHtml), 'Decorative emoji icons are not allowed in the popup.');
+assert(popupCss.includes('RTLFixancerShabnamUI'), 'The bundled Persian UI font must be declared.');
+assert(popupCss.includes('grid-template-columns: repeat(3, minmax(0, 1fr))'), 'Settings must remain in a compact three-column layout.');
+assert(!popupJs.includes('innerHTML'), 'Popup DOM must not be assembled with innerHTML.');
+assert(popupJs.includes('createTrashIcon'), 'Dynamic site actions must use the shared SVG icon builder.');
+
+console.log('Validation passed: manifest, permissions, runtime, popup design, and source safety checks are valid.');
