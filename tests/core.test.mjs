@@ -59,6 +59,12 @@ test('detects Persian, Arabic, and Hebrew text', () => {
     assert.equal(Core.classifyText('שלום עולם').language, 'he');
 });
 
+test('keeps mixed Persian paragraphs RTL even when Latin text comes first', () => {
+    assert.equal(Core.classifyText('ChatGPT جان، این پیشنهاد باید اصلاح شود.').direction, 'rtl');
+    assert.equal(Core.classifyText('/ikigai را جدا کن و مسیر جدید را بساز.').direction, 'rtl');
+    assert.equal(Core.classifyText('1. این مرحله باید به درستی راست‌چین شود.').direction, 'rtl');
+});
+
 test('keeps English text LTR and supports sensitivity thresholds', () => {
     assert.equal(Core.classifyText('Hello world').direction, 'ltr');
     assert.equal(Core.classifyText('x ا', 'strict').direction, 'ltr');
