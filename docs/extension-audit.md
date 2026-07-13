@@ -8,7 +8,7 @@ Date: 2026-07-13
 - No static content scripts.
 - No required host permissions.
 - `optional_host_permissions` are requested only from a popup or context-menu user gesture.
-- Dynamic registrations exist only for enabled sites with granted permissions.
+- Dynamic registrations exist only for enabled hostnames with granted permissions.
 - Content scripts execute in the isolated world and only in the top frame.
 - No remote code, telemetry, or content upload.
 - Only bundled font files are web accessible.
@@ -17,15 +17,15 @@ Date: 2026-07-13
 
 `content.js` uses one `MutationObserver`, an idle-work queue, and delegated editor events. It contains no interval-based DOM scanning. Candidate elements are text-bearing leaves; structural UI, code, embedded content, and navigation are skipped.
 
-Before setting `dir` or extension data attributes, the runtime records whether each attribute existed and its exact original value. A site disable, settings restart, or runtime cleanup restores that snapshot instead of blindly deleting host-page state.
+Before setting `dir` or extension data attributes, the runtime records whether each attribute existed and its exact original value. A site disable, settings restart, or runtime cleanup restores that snapshot instead of blindly deleting host-page state. If the host changes `dir` after RTL Fixancer applied its own value, cleanup preserves the newer host value.
 
 ## Permission lifecycle
 
 1. The user opens the popup on an HTTP/HTTPS page.
-2. Enabling the site calls `chrome.permissions.request()` with that host's exact and subdomain match patterns.
+2. Enabling the site calls `chrome.permissions.request()` with that exact hostname's match pattern.
 3. The service worker stores the hostname and registers `lib/core.js` plus `content.js` with `chrome.scripting.registerContentScripts()`.
 4. The current tab is injected immediately; future matching navigations use the persistent dynamic registration.
-5. Disabling sends an explicit cleanup message, unregisters the content script, and removes the now-unused host permission.
+5. Disabling sends an explicit cleanup message to every matching open tab, unregisters the content script, and removes the now-unused host permission.
 
 Unregistering alone is intentionally not treated as cleanup because already-injected scripts and styles remain in the page until explicitly reverted.
 
@@ -39,8 +39,9 @@ Unregistering alone is intentionally not treated as cleanup because already-inje
 - no `eval`, `new Function`, or remote JavaScript;
 - dynamic `document_idle` registration;
 - event-driven observation without `setInterval`;
+- relevant host attribute observation;
 - reversible mutation support;
-- domain matching, settings normalization, stable registration IDs, and RTL language classification.
+- exact-host matching, settings normalization, stable registration IDs, and RTL language classification.
 
 ## Release checklist
 
