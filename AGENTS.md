@@ -1,166 +1,44 @@
-# RTL Fixancer — Agent Guide
+# RTL Fixancer Agent Guide
 
-## Project overview
+## Scope
 
-RTL Fixancer is a Manifest V3 Chrome extension for multilingual right-to-left text enhancement across the web. It is optimized for AI chat UIs such as ChatGPT, Perplexity, Google AI Studio, Gemini, and DeepSeek, while remaining usable on normal websites.
+RTL Fixancer is a Manifest V3 Chrome extension. Version 4 uses optional per-site host permissions and dynamic content-script registration. Work directly on `main`; do not create compatibility branches, duplicate runtimes, or patch layers.
 
-- **Version:** 3.5
-- **Manifest:** MV3, content scripts at `document_start`, `all_frames: true`
-- **Default popup UI language:** English
-- **Supported RTL text:** Persian/Farsi, Arabic, Hebrew
-- **License:** CC BY-NC-ND 4.0
-- **Repo:** https://github.com/Nishef1/RTL-Fixancer
+## Architecture
 
-## Runtime architecture
+- `lib/core.js`: the single source of truth for settings normalization, hostname matching, match patterns, registration IDs, language detection, and font stacks.
+- `background.js`: owns optional permissions, dynamic registrations, storage, context menus, icon state, and privileged scripting.
+- `content.js`: owns page observation and reversible DOM changes. It must remain polling-free.
+- `popup.html`, `popup.css`, `popup.js`: own the user-facing controls and permission request initiated by a user gesture.
 
-### Background service worker
+## Hard rules
 
-File: `background.js`
+1. Never restore static `<all_urls>` content scripts or broad mandatory host permissions.
+2. Never add `tabs` unless a shipped feature demonstrably requires it.
+3. Never process a domain unless it exists in `settings.enabledSites` and Chrome has granted its host permission.
+4. Never change page DOM without capturing the exact original attribute state first.
+5. Never add a recurring `setInterval` scan to `content.js`.
+6. Do not modify structural containers, navigation, toolbars, code editors, or code blocks.
+7. Do not add remote code, analytics, trackers, or page-content network requests.
+8. Prefer deleting or integrating old code over adding another compatibility file.
+9. Do not maintain legacy storage schemas or dual code paths.
+10. Keep all user-visible strings safe through DOM APIs; do not interpolate site values into `innerHTML`.
 
-Responsibilities:
+## Required verification
 
-- Context menu creation
-- Current-domain toggle
-- Re-apply action
-- PDF export fallback
-- Icon state updates
-- Subdomain-aware enabled-site matching
-- Safe script injection only on `http:` and `https:` URLs
+Run:
 
-Important: `CONTENT_SCRIPT_FILES` must stay in sync with the manifest content-script chain.
+```bash
+npm run check
+```
 
-### Content script chain
+Then load the repository root as an unpacked extension and verify:
 
-Manifest order matters:
-
-1. `rtl-common.js`
-2. `languages/arabic.js`
-3. `languages/hebrew.js`
-4. `content.js`
-5. `content-patch.js`
-6. `content-rtl-upgrade.js`
-7. `content-ui-guard.js`
-
-### Shared RTL helpers
-
-File: `rtl-common.js`
-
-Responsibilities:
-
-- Register RTL language configs.
-- Detect available RTL language modules.
-- Apply shared RTL typography behavior.
-- Avoid duplicating detection/styling logic inside language-specific files.
-
-### Language modules
-
-Files:
-
-- `languages/arabic.js`
-- `languages/hebrew.js`
-
-These files should only register language config through `window.RTLFixancerCommon.registerLanguage(...)`. Do not duplicate core processing logic here.
-
-### Legacy core engine
-
-File: `content.js`
-
-This is the large legacy engine. It still contains the main class `RTLAIStudioManager` and handles most site-specific processing, PDF export, observers, and messaging.
-
-Treat this file as fragile. Prefer small patch files over broad edits.
-
-### Compatibility patches
-
-Files:
-
-- `content-patch.js`: subdomain-aware runtime patch and legacy compatibility fixes.
-- `content-rtl-upgrade.js`: generic multilingual RTL upgrade for safe text-leaf elements only.
-- `content-ui-guard.js`: protects host-app UI controls such as `Called tool`, `Thought for`, sidebars, nav labels, composer controls, and tool metadata from being forced RTL.
-
-### Popup UI
-
-Files:
-
-- `popup.html`
-- `popup.js`
-- `popup-patch.js`
-- `ui-i18n.js`
-
-The popup defaults to English. UI strings should live in `ui-i18n.js`, not be duplicated across popup markup and logic. Persian strings may remain as translations, but English is the default.
-
-## Configuration keys
-
-Stored in `chrome.storage.sync`:
-
-| Key | Type | Default | Purpose |
-| --- | --- | --- | --- |
-| `isEnabled` | boolean | `true` | Master runtime flag |
-| `selectedFont` | string | `vazir` | `vazir`, `shabnam`, or `default` |
-| `fontSize` | string | `default` | `default`, `small`, `medium`, `large` |
-| `detectionMode` | string | `medium` | Detection sensitivity |
-| `enabledSites` | string[] | `[]` | Enabled hostnames |
-| `uiLanguage` | string | `en` | Popup UI language |
-
-## Hard safety rules
-
-### Do not over-apply RTL
-
-Never apply RTL styles to structural containers such as:
-
-- `div`
-- `main`
-- `section`
-- `article`
-- `nav`
-- `header`
-- `footer`
-- `aside`
-- `button`
-- sidebars
-- topbars
-- composer controls
-- tool-call metadata
-
-Only apply generic RTL upgrades to safe text-leaf elements with direct RTL text.
-
-### Keep host UI LTR
-
-Host-app UI labels like `Called tool`, `Thought for`, `Sources`, `Share`, sidebar entries, and composer controls must remain LTR even when nearby assistant text is RTL.
-
-Use `content-ui-guard.js` for this behavior.
-
-### Keep background and manifest script chains synchronized
-
-When adding/removing a content script, update both:
-
-- `manifest.json` content script list
-- `background.js` `CONTENT_SCRIPT_FILES`
-
-### Avoid broad `host_permissions`
-
-The extension should avoid broad `host_permissions`. Runtime behavior is controlled by the enabled-site list and supported user-triggered scripting paths.
-
-### Be careful with `content.js`
-
-`content.js` is historically fragile and large. Avoid large refactors unless there is live browser verification. Prefer isolated patch files for targeted compatibility behavior.
-
-## Known historical failure pattern
-
-Previous optimization attempts failed because scripts performed broad string replacements against the large `content.js` file without verifying the final runtime behavior. Future changes must avoid blind multi-replacement refactors and must verify the extension inside Chrome.
-
-## Manual QA checklist
-
-After any runtime change:
-
-1. Reload unpacked extension from `chrome://extensions`.
-2. Hard-refresh ChatGPT.
-3. Verify sidebar and topbar remain LTR.
-4. Verify `Called tool`, `Thought for`, `Sources`, and composer controls remain LTR.
-5. Verify Persian assistant/user content is RTL.
-6. Verify Arabic text is RTL.
-7. Verify Hebrew text is RTL.
-8. Verify code blocks remain LTR.
-9. Verify popup text is English by default.
-10. Verify Re-apply and PDF actions still work.
-11. Verify a protected page such as `chrome://extensions` fails gracefully.
-12. Verify subdomain matching: enabling `example.com` covers `sub.example.com`.
+- an unenabled site is untouched;
+- enabling a site requests only that site's permission;
+- disabling restores existing `dir` and extension attributes without refreshing;
+- Persian, Arabic, and Hebrew text becomes RTL;
+- English, code blocks, sidebars, headers, and tool controls remain unchanged;
+- streaming and recycled chat messages are reprocessed without polling;
+- popup settings, Re-apply, context-menu actions, and Print / PDF work;
+- service-worker restart preserves dynamic registrations.
