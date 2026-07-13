@@ -33,9 +33,11 @@ const background = await read('background.js');
 assert(background.includes("runAt: 'document_idle'"), 'Dynamic scripts should run at document_idle.');
 assert(background.includes('registerContentScripts'), 'Dynamic content-script registration is required.');
 assert(background.includes('cleanupOpenTabs'), 'Disabling a site must clean already-open matching tabs.');
+assert(background.includes('chrome.permissions.onRemoved'), 'Permission changes must resynchronize dynamic registrations.');
 
 const content = await read('content.js');
 assert(content.includes('MutationObserver'), 'The content runtime must be event driven.');
+assert(content.includes("attributeFilter: ['class', 'role', 'aria-hidden', 'contenteditable']"), 'Relevant host UI attribute changes must be observed.');
 assert(!content.includes('setInterval('), 'The content runtime must not use polling intervals.');
 assert(content.includes('restoreAll()'), 'DOM mutations must be reversible.');
 
