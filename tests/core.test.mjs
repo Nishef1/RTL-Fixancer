@@ -12,19 +12,19 @@ const Core = context.RTLFixancerCore;
 test('normalizes hostnames and rejects invalid values', () => {
     assert.equal(Core.normalizeHostname('..ChatGPT.COM.'), 'chatgpt.com');
     assert.equal(Core.normalizeHostname(null), '');
+    assert.equal(Core.normalizeHostname('example.com/path'), '');
+    assert.equal(Core.normalizeHostname('*.example.com'), '');
 });
 
-test('builds exact and subdomain match patterns', () => {
-    assert.deepEqual([...Core.matchPatternsForHost('example.com')], [
-        '*://example.com/*',
-        '*://*.example.com/*'
-    ]);
+test('builds an exact-host match pattern', () => {
+    assert.deepEqual([...Core.matchPatternsForHost('example.com')], ['*://example.com/*']);
     assert.deepEqual([...Core.matchPatternsForHost('localhost')], ['*://localhost/*']);
     assert.deepEqual([...Core.matchPatternsForHost('127.0.0.1')], ['*://127.0.0.1/*']);
 });
 
-test('matches enabled parent domains but not lookalike suffixes', () => {
-    assert.equal(Core.siteMatches(['example.com'], 'chat.example.com'), true);
+test('matches only the exact enabled hostname', () => {
+    assert.equal(Core.siteMatches(['example.com'], 'example.com'), true);
+    assert.equal(Core.siteMatches(['example.com'], 'chat.example.com'), false);
     assert.equal(Core.siteMatches(['example.com'], 'notexample.com'), false);
     assert.equal(Core.findMatchingSite(['example.com', 'chat.example.com'], 'chat.example.com'), 'chat.example.com');
 });
@@ -41,7 +41,7 @@ test('normalizes settings to supported values', () => {
     assert.equal(settings.fontSize, 'large');
     assert.equal(settings.detectionMode, 'relaxed');
     assert.equal(settings.uiLanguage, 'fa');
-    assert.deepEqual([...settings.enabledSites], ['example.com']);
+    assert.deepEqual([...settings.enabledSites], ['chat.example.com', 'example.com']);
 });
 
 test('detects Persian, Arabic, and Hebrew text', () => {
