@@ -1,303 +1,311 @@
-const DEFAULT_SETTINGS = {
-    isEnabled: true,
-    selectedFont: 'vazir',
-    fontSize: 'default',
-    detectionMode: 'medium',
-    enabledSites: []
-};
+'use strict';
 
-const INJECTABLE_PROTOCOLS = new Set(['http:', 'https:']);
-const CONTENT_SCRIPT_FILES = [
-    'rtl-common.js',
-    'languages/arabic.js',
-    'languages/hebrew.js',
-    'content.js',
-    'content-patch.js',
-    'content-rtl-upgrade.js',
-    'content-ui-guard.js'
-];
+importScripts('lib/core.js');
 
-function getSyncStorage(defaults = DEFAULT_SETTINGS) {
-    return new Promise((resolve, reject) => {
-        chrome.storage.sync.get(defaults, (result) => {
-            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-            else resolve(result);
-        });
-    });
+const Core = globalThis.RTLFixancerCore;
+const CONTENT_FILES = Object.freeze(['lib/core.js', 'content.js']);
+const REGISTRATION_PREFIX = 'rtl-fixancer-';
+const STORAGE_KEY = 'settings';
+let registrationSyncQueue = Promise.resolve();
+
+function getIconPaths(enabled) {
+    const state = enabled ? 'on' : 'off';
+    return {
+        16: `images/RTL-${state}-16.png`,
+        32: `images/RTL-${state}-32.png`,
+        48: `images/RTL-${state}-48.png`,
+        128: `images/RTL-${state}-128.png`
+    };
 }
 
-function setSyncStorage(data) {
-    return new Promise((resolve, reject) => {
-        chrome.storage.sync.set(data, () => {
-            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-            else resolve();
-        });
-    });
+async function readSettings() {
+    const stored = await chrome.storage.sync.get({ [STORAGE_KEY]: Core.DEFAULT_SETTINGS });
+    return Core.normalizeSettings(stored[STORAGE_KEY]);
 }
 
-function isInjectableUrl(tabUrl) {
+async function writeSettings(settings) {
+    const normalized = Core.normalizeSettings(settings);
+    await chrome.storage.sync.set({ [STORAGE_KEY]: normalized });
+    return normalized;
+}
+
+async function hasPermissionForHost(hostname) {
+    const origins = Core.matchPatternsForHost(hostname);
+    if (origins.length === 0) return false;
+    return chrome.permissions.contains({ origins });
+}
+
+async function buildDesiredRegistrations(settings) {
+    const registrations = [];
+    for (const hostname of settings.enabledSites) {
+        if (!await hasPermissionForHost(hostname)) continue;
+        registrations.push({
+            id: Core.registrationId(hostname),
+            js: CONTENT_FILES,
+            matches: Core.matchPatternsForHost(hostname),
+            allFrames: false,
+            persistAcrossSessions: true,
+            runAt: 'document_idle',
+            world: 'ISOLATED'
+        });
+    }
+    return registrations;
+}
+
+function sameRegistration(current, desired) {
+    const normalizeMatches = values => [...(values || [])].sort();
+    return JSON.stringify(current.js || []) === JSON.stringify(desired.js || [])
+        && JSON.stringify(normalizeMatches(current.matches)) === JSON.stringify(normalizeMatches(desired.matches))
+        && Boolean(current.allFrames) === Boolean(desired.allFrames)
+        && Boolean(current.persistAcrossSessions) === Boolean(desired.persistAcrossSessions)
+        && current.runAt === desired.runAt
+        && (current.world || 'ISOLATED') === desired.world;
+}
+
+async function syncRegistrationsNow(settings = null) {
+    const normalized = settings || await readSettings();
+    const current = await chrome.scripting.getRegisteredContentScripts();
+    const managed = new Map(
+        current
+            .filter(script => script.id.startsWith(REGISTRATION_PREFIX))
+            .map(script => [script.id, script])
+    );
+    const desired = await buildDesiredRegistrations(normalized);
+    const desiredById = new Map(desired.map(script => [script.id, script]));
+
+    const obsoleteIds = [...managed.keys()].filter(id => !desiredById.has(id));
+    if (obsoleteIds.length > 0) {
+        await chrome.scripting.unregisterContentScripts({ ids: obsoleteIds });
+    }
+
+    const newScripts = [];
+    const changedScripts = [];
+    for (const script of desired) {
+        const existing = managed.get(script.id);
+        if (!existing) newScripts.push(script);
+        else if (!sameRegistration(existing, script)) changedScripts.push(script);
+    }
+
+    if (changedScripts.length > 0) await chrome.scripting.updateContentScripts(changedScripts);
+    if (newScripts.length > 0) await chrome.scripting.registerContentScripts(newScripts);
+    return desired;
+}
+
+function syncRegistrations(settings = null) {
+    const run = () => syncRegistrationsNow(settings);
+    registrationSyncQueue = registrationSyncQueue.then(run, run);
+    return registrationSyncQueue;
+}
+
+function normalizeTabId(value) {
+    return Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+async function sendToTab(tabId, message) {
+    const id = normalizeTabId(tabId);
+    if (id === null) return null;
     try {
-        if (!tabUrl) return false;
-        return INJECTABLE_PROTOCOLS.has(new URL(tabUrl).protocol);
+        return await chrome.tabs.sendMessage(id, message, { frameId: 0 });
+    } catch (_) {
+        return null;
+    }
+}
+
+async function injectRuntime(tabId) {
+    const id = normalizeTabId(tabId);
+    if (id === null) throw new Error('A valid tab is required.');
+    await chrome.scripting.executeScript({
+        target: { tabId: id, frameIds: [0] },
+        files: CONTENT_FILES,
+        world: 'ISOLATED'
+    });
+}
+
+async function ensureRuntime(tabId) {
+    const ping = await sendToTab(tabId, { type: 'runtime:ping' });
+    if (ping?.ok) return ping;
+    await injectRuntime(tabId);
+    return sendToTab(tabId, { type: 'runtime:ping' });
+}
+
+async function updateIcon(tabId, hostname, settings = null) {
+    const id = normalizeTabId(tabId);
+    if (id === null) return;
+    const normalizedHost = Core.normalizeHostname(hostname);
+    const currentSettings = settings || await readSettings();
+    const enabled = Core.siteMatches(currentSettings.enabledSites, normalizedHost)
+        && await hasPermissionForHost(normalizedHost);
+    await chrome.action.setIcon({ tabId: id, path: getIconPaths(enabled) });
+}
+
+async function removeUnusedHostPermission(hostname, remainingSites) {
+    const host = Core.normalizeHostname(hostname);
+    if (!host) return false;
+    const stillCovered = remainingSites.some(site => {
+        const normalized = Core.normalizeHostname(site);
+        return normalized === host || normalized.endsWith(`.${host}`) || host.endsWith(`.${normalized}`);
+    });
+    if (stillCovered) return false;
+    try {
+        return await chrome.permissions.remove({ origins: Core.matchPatternsForHost(host) });
     } catch (_) {
         return false;
     }
 }
 
-function getHostname(tabUrl) {
-    try {
-        if (!isInjectableUrl(tabUrl)) return '';
-        return new URL(tabUrl).hostname.toLowerCase();
-    } catch (_) {
-        return '';
+async function setSiteEnabled({ hostname, enabled, tabId = null }) {
+    const host = Core.normalizeHostname(hostname);
+    if (!host) throw new Error('Invalid hostname.');
+
+    let settings = await readSettings();
+    const sites = new Set(settings.enabledSites);
+
+    if (enabled) {
+        if (!await hasPermissionForHost(host)) {
+            const error = new Error('Site permission has not been granted.');
+            error.code = 'HOST_PERMISSION_REQUIRED';
+            throw error;
+        }
+        sites.add(host);
+    } else {
+        const matched = Core.findMatchingSite([...sites], host);
+        if (matched) sites.delete(matched);
     }
-}
 
-let contextMenusCreating = false;
-let contextMenusTimeout = null;
+    settings = await writeSettings({ ...settings, enabledSites: [...sites] });
 
-function createContextMenus() {
-    if (contextMenusCreating || !chrome.contextMenus) return;
-    contextMenusCreating = true;
-    clearTimeout(contextMenusTimeout);
-    contextMenusTimeout = setTimeout(() => { contextMenusCreating = false; }, 5000);
-
-    chrome.contextMenus.removeAll(() => {
-        if (chrome.runtime.lastError) console.warn('removeAll failed:', chrome.runtime.lastError.message);
-
-        const menus = [
-            { id: 'rtl_parent', title: 'RTL Fixancer', contexts: ['all'] },
-            { id: 'rtl_toggle_current_domain', parentId: 'rtl_parent', title: 'Toggle current domain', contexts: ['all'] },
-            { id: 'rtl_apply_reload', parentId: 'rtl_parent', title: 'Re-apply on this page', contexts: ['all'] },
-            { id: 'rtl_export_pdf', parentId: 'rtl_parent', title: 'Export page text to PDF', contexts: ['all'] }
-        ];
-
-        let created = 0;
-        menus.forEach(menu => {
-            chrome.contextMenus.create(menu, () => {
-                if (chrome.runtime.lastError) console.warn('create failed for', menu.id, ':', chrome.runtime.lastError.message);
-                created++;
-                if (created === menus.length) {
-                    clearTimeout(contextMenusTimeout);
-                    contextMenusCreating = false;
-                }
-            });
-        });
-    });
-}
-
-function hostnameMatch(enabledSites, hostname) {
-    if (!hostname || !Array.isArray(enabledSites)) return false;
-    const normalizedHostname = hostname.toLowerCase();
-    return enabledSites.some(site => {
-        if (typeof site !== 'string') return false;
-        const normalizedSite = site.toLowerCase();
-        return normalizedHostname === normalizedSite || normalizedHostname.endsWith('.' + normalizedSite);
-    });
-}
-
-function findMatchedSite(enabledSites, hostname) {
-    if (!hostname || !Array.isArray(enabledSites)) return null;
-    const normalizedHostname = hostname.toLowerCase();
-    return enabledSites.find(site => {
-        if (typeof site !== 'string') return false;
-        const normalizedSite = site.toLowerCase();
-        return normalizedHostname === normalizedSite || normalizedHostname.endsWith('.' + normalizedSite);
-    }) || null;
-}
-
-function toggleHostname(enabledSites, hostname) {
-    const sites = new Set(Array.isArray(enabledSites) ? enabledSites : []);
-    const matchedSite = findMatchedSite(Array.from(sites), hostname);
-    if (matchedSite) sites.delete(matchedSite);
-    else if (hostname) sites.add(hostname.toLowerCase());
-    return Array.from(sites).sort();
-}
-
-function getIconPaths(isOn) {
-    if (isOn) {
-        return {
-            16: 'images/RTL-on-16.png',
-            32: 'images/RTL-on-32.png',
-            48: 'images/RTL-on-48.png',
-            128: 'images/RTL-on-128.png'
-        };
+    if (!enabled) {
+        await sendToTab(tabId, { type: 'runtime:cleanup' });
     }
+
+    await syncRegistrations(settings);
+
+    if (enabled && tabId !== null) {
+        await ensureRuntime(tabId);
+        await sendToTab(tabId, { type: 'runtime:settings', settings });
+    }
+
+    if (!enabled) {
+        await removeUnusedHostPermission(host, settings.enabledSites);
+    }
+
+    await updateIcon(tabId, host, settings);
+    return { settings, enabled: Core.siteMatches(settings.enabledSites, host) };
+}
+
+async function updateSettings(patch) {
+    const current = await readSettings();
+    const allowedPatch = {};
+    for (const key of ['selectedFont', 'fontSize', 'detectionMode', 'uiLanguage']) {
+        if (Object.prototype.hasOwnProperty.call(patch || {}, key)) allowedPatch[key] = patch[key];
+    }
+    return writeSettings({ ...current, ...allowedPatch });
+}
+
+async function getSiteStatus(hostname) {
+    const host = Core.normalizeHostname(hostname);
+    const settings = await readSettings();
+    const permissionGranted = host ? await hasPermissionForHost(host) : false;
     return {
-        16: 'images/RTL-off-16.png',
-        32: 'images/RTL-off-32.png',
-        48: 'images/RTL-off-48.png',
-        128: 'images/RTL-off-128.png'
+        hostname: host,
+        enabled: Boolean(host && permissionGranted && Core.siteMatches(settings.enabledSites, host)),
+        permissionGranted,
+        settings
     };
 }
 
-const iconUpdateQueue = {};
-function debounceUpdateIcon(tabId, url) {
-    clearTimeout(iconUpdateQueue[tabId]);
-    iconUpdateQueue[tabId] = setTimeout(() => {
-        delete iconUpdateQueue[tabId];
-        updateIconForTab(tabId, url);
-    }, 150);
+async function reapply(tabId, hostname) {
+    const status = await getSiteStatus(hostname);
+    if (!status.enabled) throw new Error('Enable this site before re-applying RTL fixes.');
+    await ensureRuntime(tabId);
+    return sendToTab(tabId, { type: 'runtime:reapply', settings: status.settings });
 }
 
-async function updateIconForTab(tabId, tabUrl) {
-    try {
-        if (!tabUrl) {
-            const tab = await chrome.tabs.get(tabId).catch(() => null);
-            tabUrl = tab?.url || '';
-        }
-        if (!isInjectableUrl(tabUrl)) {
-            await chrome.action.setIcon({ tabId, path: getIconPaths(false) });
-            return;
-        }
-        const hostname = getHostname(tabUrl);
-        const settings = await getSyncStorage(DEFAULT_SETTINGS);
-        const enabled = hostnameMatch(settings.enabledSites, hostname);
-        await chrome.action.setIcon({ tabId, path: getIconPaths(enabled) });
-    } catch (e) {
-        console.error('updateIconForTab error:', e);
-    }
-}
-
-function sendMessageToTab(tabId, message) {
-    return new Promise(resolve => {
-        try {
-            chrome.tabs.sendMessage(tabId, message, response => {
-                if (chrome.runtime.lastError) {
-                    resolve({ ok: false, error: chrome.runtime.lastError.message });
-                    return;
-                }
-                resolve({ ok: true, response });
-            });
-        } catch (error) {
-            resolve({ ok: false, error: error.message });
-        }
+async function printCurrentPage(tabId) {
+    const response = await sendToTab(tabId, { type: 'runtime:print' });
+    if (response?.ok) return response;
+    await chrome.scripting.executeScript({
+        target: { tabId, frameIds: [0] },
+        func: () => window.print(),
+        world: 'ISOLATED'
     });
+    return { ok: true };
 }
 
-async function executeScriptSafely(tabId, details) {
-    try {
-        await chrome.scripting.executeScript({ target: { tabId }, ...details });
-        return { ok: true };
-    } catch (error) {
-        return { ok: false, error: error.message };
-    }
-}
-
-async function requestContentReload(tabId, settings) {
-    const message = { action: 'fullReload', ...settings };
-    let result = await sendMessageToTab(tabId, message);
-    if (result.ok) return result;
-    const injection = await executeScriptSafely(tabId, { files: CONTENT_SCRIPT_FILES });
-    if (!injection.ok) return injection;
-    await new Promise(resolve => setTimeout(resolve, 250));
-    return sendMessageToTab(tabId, message);
-}
-
-async function exportPdf(tab) {
-    if (!tab?.id || !isInjectableUrl(tab.url)) return;
-    let result = await sendMessageToTab(tab.id, { action: 'exportPdf' });
-    if (result.ok) return;
-    const injection = await executeScriptSafely(tab.id, { files: CONTENT_SCRIPT_FILES });
-    if (injection.ok) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        result = await sendMessageToTab(tab.id, { action: 'exportPdf' });
-        if (result.ok) return;
-    }
-    const printFallback = await executeScriptSafely(tab.id, { func: () => window.print() });
-    if (!printFallback.ok) console.error('Export PDF failed:', result.error || injection.error || printFallback.error);
+async function createContextMenus() {
+    await chrome.contextMenus.removeAll();
+    const entries = [
+        { id: 'rtl-fixancer-root', title: 'RTL Fixancer', contexts: ['all'] },
+        { id: 'rtl-fixancer-toggle', parentId: 'rtl-fixancer-root', title: 'Enable or disable on this site', contexts: ['all'] },
+        { id: 'rtl-fixancer-reapply', parentId: 'rtl-fixancer-root', title: 'Re-apply RTL fixes', contexts: ['all'] },
+        { id: 'rtl-fixancer-print', parentId: 'rtl-fixancer-root', title: 'Print / Save as PDF', contexts: ['all'] }
+    ];
+    for (const entry of entries) chrome.contextMenus.create(entry);
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-    createContextMenus();
-    try { chrome.action.setIcon({ path: getIconPaths(false) }); } catch (e) { console.error(e); }
+    void (async () => {
+        const stored = await chrome.storage.sync.get(STORAGE_KEY);
+        if (!stored[STORAGE_KEY]) await writeSettings(Core.DEFAULT_SETTINGS);
+        await createContextMenus();
+        await syncRegistrations();
+        await chrome.action.setIcon({ path: getIconPaths(false) });
+    })().catch(error => console.error('RTL Fixancer installation failed:', error));
 });
 
-if (chrome.runtime.onStartup) {
-    chrome.runtime.onStartup.addListener(() => {
-        createContextMenus();
-        try { chrome.action.setIcon({ path: getIconPaths(false) }); } catch (e) { console.error(e); }
-    });
-}
-
-if (chrome.contextMenus) {
-    chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-        try {
-            if (!tab?.id || !isInjectableUrl(tab.url)) return;
-            const hostname = getHostname(tab.url);
-            if (!hostname) return;
-            if (info.menuItemId === 'rtl_toggle_current_domain') {
-                const settings = await getSyncStorage(DEFAULT_SETTINGS);
-                const enabledSites = toggleHostname(settings.enabledSites, hostname);
-                const nextSettings = { ...settings, enabledSites };
-                await setSyncStorage({ enabledSites });
-                await requestContentReload(tab.id, nextSettings);
-                const isNowEnabled = hostnameMatch(enabledSites, hostname);
-                await chrome.action.setIcon({ tabId: tab.id, path: getIconPaths(isNowEnabled) });
-                return;
-            }
-            if (info.menuItemId === 'rtl_apply_reload') {
-                const settings = await getSyncStorage(DEFAULT_SETTINGS);
-                await requestContentReload(tab.id, settings);
-                return;
-            }
-            if (info.menuItemId === 'rtl_export_pdf') await exportPdf(tab);
-        } catch (e) {
-            console.error('Context menu handler error:', e);
-        }
-    });
-}
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message?.action === 'heartbeat') {
-        const domain = typeof message.domain === 'string' ? message.domain : 'unknown';
-        chrome.storage.local.set({
-            [`heartbeat_${domain}`]: {
-                timestamp: message.timestamp || Date.now(),
-                stats: message.stats || {}
-            }
-        });
-        try {
-            if (sender?.tab?.id) chrome.action.setIcon({ tabId: sender.tab.id, path: getIconPaths(true) });
-        } catch (e) {
-            console.error(e);
-        }
-        sendResponse({ success: true });
-        return true;
-    }
-    sendResponse({ success: false, error: 'Unknown action' });
-    return false;
+chrome.runtime.onStartup.addListener(() => {
+    void Promise.all([createContextMenus(), syncRegistrations()])
+        .catch(error => console.error('RTL Fixancer startup failed:', error));
 });
 
-chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace === 'sync') {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            const tab = tabs && tabs[0];
-            if (tab?.id) debounceUpdateIcon(tab.id, tab.url || '');
-        });
-    }
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+    void (async () => {
+        if (!tab?.id || !Core.isSupportedUrl(tab.url || '')) return;
+        const hostname = new URL(tab.url).hostname;
+
+        if (info.menuItemId === 'rtl-fixancer-toggle') {
+            const status = await getSiteStatus(hostname);
+            if (!status.enabled && !status.permissionGranted) {
+                const granted = await chrome.permissions.request({ origins: Core.matchPatternsForHost(hostname) });
+                if (!granted) return;
+            }
+            await setSiteEnabled({ hostname, enabled: !status.enabled, tabId: tab.id });
+            return;
+        }
+        if (info.menuItemId === 'rtl-fixancer-reapply') {
+            await reapply(tab.id, hostname);
+            return;
+        }
+        if (info.menuItemId === 'rtl-fixancer-print') await printCurrentPage(tab.id);
+    })().catch(error => console.error('RTL Fixancer context-menu action failed:', error));
 });
 
-if (chrome.tabs.onRemoved) {
-    chrome.tabs.onRemoved.addListener((tabId) => {
-        if (iconUpdateQueue[tabId]) {
-            clearTimeout(iconUpdateQueue[tabId]);
-            delete iconUpdateQueue[tabId];
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    void (async () => {
+        switch (message?.type) {
+            case 'settings:get':
+                return { ok: true, settings: await readSettings() };
+            case 'settings:update':
+                return { ok: true, settings: await updateSettings(message.patch) };
+            case 'site:status':
+                return { ok: true, ...(await getSiteStatus(message.hostname)) };
+            case 'site:set':
+                return { ok: true, ...(await setSiteEnabled(message)) };
+            case 'runtime:reapply':
+                return { ok: true, response: await reapply(message.tabId, message.hostname) };
+            case 'runtime:print':
+                return await printCurrentPage(message.tabId);
+            default:
+                return { ok: false, error: 'Unknown message type.' };
         }
+    })().then(sendResponse).catch(error => {
+        sendResponse({ ok: false, error: error.message, code: error.code || 'UNKNOWN' });
     });
-}
+    return true;
+});
 
-if (chrome.tabs.onActivated) {
-    chrome.tabs.onActivated.addListener(async (activeInfo) => {
-        try {
-            const tab = await chrome.tabs.get(activeInfo.tabId);
-            debounceUpdateIcon(activeInfo.tabId, tab.url || '');
-        } catch (e) { console.error(e); }
-    });
-}
-
-if (chrome.tabs.onUpdated) {
-    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-        if (changeInfo.status === 'complete') debounceUpdateIcon(tabId, tab.url || '');
-    });
-}
+chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'sync' || !changes[STORAGE_KEY]) return;
+    void syncRegistrations(Core.normalizeSettings(changes[STORAGE_KEY].newValue))
+        .catch(error => console.error('RTL Fixancer registration sync failed:', error));
+});
