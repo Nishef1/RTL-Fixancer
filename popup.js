@@ -4,60 +4,81 @@
     const Core = globalThis.RTLFixancerCore;
     if (!Core) return;
 
+    const DONATION_ADDRESS = '0x5ba08cc1429bead9c07dc2030b881c6ed33c3a00';
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+
     const copy = {
         en: {
             currentSite: 'Current site',
             loading: 'Loading…',
-            restricted: 'Restricted or unsupported page',
-            disabledHint: 'Enable access only for this site. No page content leaves your browser.',
-            enabledHint: 'RTL enhancement is active on this site.',
-            permissionHint: 'Chrome will ask for access to this site when you enable it.',
+            restricted: 'Restricted page',
+            enabledHint: 'Private, on-device RTL processing is active.',
+            disabledHint: 'Enable access for this site only.',
+            permissionHint: 'Chrome will ask once for this hostname.',
             reapply: 'Re-apply',
-            print: 'Print / PDF',
-            appearance: 'Appearance',
+            print: 'PDF',
+            settings: 'Settings',
             font: 'Font',
             size: 'Size',
-            detection: 'Detection',
-            enabledSites: 'Enabled sites',
+            sensitivity: 'Sensitivity',
+            sites: 'Sites',
             empty: 'No sites enabled yet.',
             remove: 'Remove',
-            footer: 'Runs only on sites you enable.',
+            footer: 'Changes are applied immediately.',
             enabling: 'Requesting access…',
             enabled: 'Enabled on this site.',
             disabled: 'Disabled on this site.',
             updated: 'Settings updated.',
             denied: 'Site access was not granted.',
             error: 'Something went wrong. Reload the extension and try again.',
-            fonts: { vazir: 'Vazir', shabnam: 'Shabnam', default: 'Website default' },
-            sizes: { default: 'Website default', small: 'Small', medium: 'Medium', large: 'Large' },
-            modes: { strict: 'Strict', balanced: 'Balanced', relaxed: 'Relaxed' }
+            active: 'Active',
+            inactive: 'Inactive',
+            statusActive: 'Status: Active on this site',
+            statusDisabled: 'Status: Disconnected · site disabled',
+            statusRestricted: 'Status: This page is restricted',
+            switchLanguage: 'Switch popup language',
+            donate: 'Copy donation address',
+            donationCopied: 'Donation address copied.',
+            github: 'Open GitHub repository',
+            fonts: { vazir: 'Vazir', shabnam: 'Shabnam', default: 'Default' },
+            sizes: { default: 'Default', small: 'Small', medium: 'Medium', large: 'Large' },
+            modes: { strict: 'Strict', balanced: 'Medium', relaxed: 'Relaxed' }
         },
         fa: {
             currentSite: 'سایت فعلی',
             loading: 'در حال بارگذاری…',
-            restricted: 'صفحه محدود یا پشتیبانی‌نشده',
-            disabledHint: 'دسترسی فقط برای همین سایت فعال می‌شود و محتوای صفحه از مرورگر خارج نمی‌شود.',
-            enabledHint: 'بهبود نوشتار راست‌به‌چپ در این سایت فعال است.',
-            permissionHint: 'هنگام فعال‌سازی، کروم برای دسترسی به همین سایت اجازه می‌خواهد.',
+            restricted: 'صفحه محدود است',
+            enabledHint: 'پردازش راست‌به‌چپ به‌صورت محلی فعال است.',
+            disabledHint: 'دسترسی فقط برای همین سایت فعال می‌شود.',
+            permissionHint: 'کروم یک‌بار برای همین دامنه اجازه می‌خواهد.',
             reapply: 'اعمال مجدد',
-            print: 'پرینت / PDF',
-            appearance: 'نمایش',
+            print: 'PDF',
+            settings: 'تنظیمات',
             font: 'فونت',
             size: 'اندازه',
-            detection: 'تشخیص',
-            enabledSites: 'سایت‌های فعال',
+            sensitivity: 'حساسیت',
+            sites: 'سایت‌ها',
             empty: 'هنوز سایتی فعال نشده است.',
             remove: 'حذف',
-            footer: 'فقط روی سایت‌هایی اجرا می‌شود که خودت فعال کرده‌ای.',
+            footer: 'تغییرات بلافاصله اعمال می‌شوند.',
             enabling: 'در حال درخواست دسترسی…',
             enabled: 'برای این سایت فعال شد.',
             disabled: 'برای این سایت غیرفعال شد.',
             updated: 'تنظیمات به‌روزرسانی شد.',
             denied: 'اجازه دسترسی به سایت داده نشد.',
-            error: 'مشکلی رخ داد. افزونه را دوباره بارگذاری و مجدداً تلاش کن.',
-            fonts: { vazir: 'وزیر', shabnam: 'شبنم', default: 'فونت سایت' },
-            sizes: { default: 'اندازه سایت', small: 'کوچک', medium: 'متوسط', large: 'بزرگ' },
-            modes: { strict: 'سخت‌گیرانه', balanced: 'متعادل', relaxed: 'آزاد' }
+            error: 'مشکلی رخ داد. افزونه را دوباره بارگذاری کن.',
+            active: 'فعال',
+            inactive: 'غیرفعال',
+            statusActive: 'وضعیت: برای این سایت فعال است',
+            statusDisabled: 'وضعیت: قطع · سایت غیرفعال است',
+            statusRestricted: 'وضعیت: این صفحه محدود است',
+            switchLanguage: 'تغییر زبان افزونه',
+            donate: 'کپی آدرس حمایت مالی',
+            donationCopied: 'آدرس حمایت مالی کپی شد.',
+            github: 'بازکردن مخزن گیت‌هاب',
+            fonts: { vazir: 'وزیر', shabnam: 'شبنم', default: 'پیش‌فرض' },
+            sizes: { default: 'پیش‌فرض', small: 'کوچک', medium: 'متوسط', large: 'بزرگ' },
+            modes: { strict: 'سخت‌گیرانه', balanced: 'متوسط', relaxed: 'آزاد' }
         }
     };
 
@@ -78,10 +99,13 @@
 
     function collectElements() {
         for (const id of [
-            'notice', 'currentSite', 'siteToggle', 'siteHint', 'reapplyButton',
-            'printButton', 'fontSelect', 'fontSizeSelect', 'detectionModeSelect',
-            'sitesList', 'sitesCount', 'languageSelect', 'githubButton'
-        ]) elements[id] = $(id);
+            'notice', 'currentSite', 'siteToggle', 'siteHint', 'activeLabel',
+            'reapplyButton', 'printButton', 'fontSelect', 'fontSizeSelect',
+            'detectionModeSelect', 'sitesList', 'sitesCount', 'languageToggle',
+            'githubButton', 'donateButton', 'connectionStatus', 'statusText'
+        ]) {
+            elements[id] = $(id);
+        }
     }
 
     function t(key) {
@@ -105,7 +129,7 @@
         window.clearTimeout(showNotice.timer);
         showNotice.timer = window.setTimeout(() => {
             elements.notice.hidden = true;
-        }, 3200);
+        }, 2800);
     }
 
     function setBusy(busy) {
@@ -113,7 +137,8 @@
         elements.siteToggle.disabled = busy || !state.supported;
         elements.reapplyButton.disabled = busy || !state.status?.enabled;
         elements.printButton.disabled = busy || !state.supported;
-        for (const select of [elements.fontSelect, elements.fontSizeSelect, elements.detectionModeSelect, elements.languageSelect]) {
+        elements.languageToggle.disabled = busy;
+        for (const select of [elements.fontSelect, elements.fontSizeSelect, elements.detectionModeSelect]) {
             select.disabled = busy;
         }
     }
@@ -124,42 +149,87 @@
         }
     }
 
+    function setButtonLabel(button, value) {
+        const label = button.querySelector('span');
+        if (label) label.textContent = value;
+    }
+
+    function updateLanguageToggle(language) {
+        for (const option of elements.languageToggle.querySelectorAll('.language-option')) {
+            option.classList.toggle('active', option.dataset.language === language);
+        }
+        elements.languageToggle.setAttribute('aria-label', t('switchLanguage'));
+        elements.languageToggle.title = t('switchLanguage');
+    }
+
     function applyLanguage() {
         const language = state.settings.uiLanguage === 'fa' ? 'fa' : 'en';
         document.documentElement.lang = language;
         document.documentElement.dir = language === 'fa' ? 'rtl' : 'ltr';
-        document.querySelector('#site-heading').textContent = t('currentSite');
-        document.querySelector('#appearance-heading').textContent = t('appearance');
+
+        $('#site-heading').textContent = t('currentSite');
+        $('#appearance-heading').textContent = t('settings');
+        $('#sites-heading').textContent = t('sites');
+
         const fields = document.querySelectorAll('.field > span');
         if (fields[0]) fields[0].textContent = t('font');
         if (fields[1]) fields[1].textContent = t('size');
-        if (fields[2]) fields[2].textContent = t('detection');
-        document.querySelector('#sites-heading').textContent = t('enabledSites');
-        elements.reapplyButton.textContent = t('reapply');
-        elements.printButton.textContent = t('print');
-        document.querySelector('.footer > span').textContent = t('footer');
-        elements.languageSelect.value = language;
-        const languageCopy = copy[language];
-        translateOptions(elements.fontSelect, languageCopy.fonts);
-        translateOptions(elements.fontSizeSelect, languageCopy.sizes);
-        translateOptions(elements.detectionModeSelect, languageCopy.modes);
+        if (fields[2]) fields[2].textContent = t('sensitivity');
+
+        setButtonLabel(elements.reapplyButton, t('reapply'));
+        setButtonLabel(elements.printButton, t('print'));
+        $('.footer > span').textContent = t('footer');
+
+        elements.donateButton.setAttribute('aria-label', t('donate'));
+        elements.donateButton.title = t('donate');
+        elements.githubButton.setAttribute('aria-label', t('github'));
+        elements.githubButton.title = t('github');
+
+        updateLanguageToggle(language);
+        translateOptions(elements.fontSelect, copy[language].fonts);
+        translateOptions(elements.fontSizeSelect, copy[language].sizes);
+        translateOptions(elements.detectionModeSelect, copy[language].modes);
         renderSiteStatus();
         renderSites();
     }
 
     function renderSiteStatus() {
+        const enabled = Boolean(state.status?.enabled);
         elements.currentSite.textContent = state.supported ? state.hostname : t('restricted');
-        elements.siteToggle.checked = Boolean(state.status?.enabled);
-        elements.siteHint.textContent = !state.supported
-            ? t('restricted')
-            : state.status?.enabled
-                ? t('enabledHint')
-                : state.status?.permissionGranted
-                    ? t('disabledHint')
-                    : t('permissionHint');
-        elements.reapplyButton.disabled = state.busy || !state.status?.enabled;
+        elements.siteToggle.checked = enabled;
+        elements.activeLabel.textContent = enabled ? t('active') : t('inactive');
+
+        elements.connectionStatus.classList.remove('connected', 'disconnected', 'restricted');
+        if (!state.supported) {
+            elements.connectionStatus.classList.add('restricted');
+            elements.statusText.textContent = t('statusRestricted');
+            elements.siteHint.textContent = t('restricted');
+        } else if (enabled) {
+            elements.connectionStatus.classList.add('connected');
+            elements.statusText.textContent = t('statusActive');
+            elements.siteHint.textContent = t('enabledHint');
+        } else {
+            elements.connectionStatus.classList.add('disconnected');
+            elements.statusText.textContent = t('statusDisabled');
+            elements.siteHint.textContent = state.status?.permissionGranted
+                ? t('disabledHint')
+                : t('permissionHint');
+        }
+
+        elements.reapplyButton.disabled = state.busy || !enabled;
         elements.printButton.disabled = state.busy || !state.supported;
         elements.siteToggle.disabled = state.busy || !state.supported;
+    }
+
+    function createTrashIcon() {
+        const svg = document.createElementNS(SVG_NS, 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('aria-hidden', 'true');
+
+        const path = document.createElementNS(SVG_NS, 'path');
+        path.setAttribute('d', 'M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5');
+        svg.appendChild(path);
+        return svg;
     }
 
     function createSiteItem(hostname) {
@@ -173,8 +243,9 @@
         const remove = document.createElement('button');
         remove.type = 'button';
         remove.className = 'remove-button';
-        remove.textContent = t('remove');
+        remove.title = t('remove');
         remove.setAttribute('aria-label', `${t('remove')} ${hostname}`);
+        remove.appendChild(createTrashIcon());
         remove.addEventListener('click', () => void removeSite(hostname));
 
         row.append(label, remove);
@@ -185,6 +256,7 @@
         const sites = state.settings.enabledSites || [];
         elements.sitesCount.textContent = String(sites.length);
         elements.sitesList.replaceChildren();
+
         if (sites.length === 0) {
             const empty = document.createElement('p');
             empty.className = 'empty';
@@ -192,7 +264,10 @@
             elements.sitesList.appendChild(empty);
             return;
         }
-        for (const hostname of sites) elements.sitesList.appendChild(createSiteItem(hostname));
+
+        for (const hostname of sites) {
+            elements.sitesList.appendChild(createSiteItem(hostname));
+        }
     }
 
     async function getActiveTab() {
@@ -246,11 +321,14 @@
                 enabled,
                 tabId: state.tab.id
             });
+
             state.settings = Core.normalizeSettings(response.settings);
             state.status = {
                 ...state.status,
                 enabled: response.enabled,
-                permissionGranted: enabled ? true : await chrome.permissions.contains({ origins: Core.matchPatternsForHost(state.hostname) })
+                permissionGranted: enabled
+                    ? true
+                    : await chrome.permissions.contains({ origins: Core.matchPatternsForHost(state.hostname) })
             };
             showNotice(enabled ? t('enabled') : t('disabled'));
             renderSiteStatus();
@@ -270,7 +348,13 @@
             const response = await send({ type: 'site:set', hostname, enabled: false });
             state.settings = Core.normalizeSettings(response.settings);
             if (Core.siteMatches([hostname], state.hostname)) {
-                state.status = { ...state.status, enabled: false };
+                state.status = {
+                    ...state.status,
+                    enabled: false,
+                    permissionGranted: await chrome.permissions.contains({
+                        origins: Core.matchPatternsForHost(state.hostname)
+                    })
+                };
             }
             showNotice(t('disabled'));
             renderSiteStatus();
@@ -300,6 +384,24 @@
         }
     }
 
+    async function copyDonationAddress() {
+        try {
+            await navigator.clipboard.writeText(DONATION_ADDRESS);
+            showNotice(t('donationCopied'));
+        } catch (_) {
+            const textarea = document.createElement('textarea');
+            textarea.value = DONATION_ADDRESS;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            const copied = document.execCommand('copy');
+            textarea.remove();
+            showNotice(copied ? t('donationCopied') : DONATION_ADDRESS, !copied);
+        }
+    }
+
     function bindEvents() {
         elements.siteToggle.addEventListener('change', event => void toggleSite(event.target.checked));
         elements.reapplyButton.addEventListener('click', async () => {
@@ -326,8 +428,14 @@
         elements.fontSelect.addEventListener('change', event => void updateSetting('selectedFont', event.target.value));
         elements.fontSizeSelect.addEventListener('change', event => void updateSetting('fontSize', event.target.value));
         elements.detectionModeSelect.addEventListener('change', event => void updateSetting('detectionMode', event.target.value));
-        elements.languageSelect.addEventListener('change', event => void updateSetting('uiLanguage', event.target.value));
-        elements.githubButton.addEventListener('click', () => void chrome.tabs.create({ url: 'https://github.com/Nishef1/RTL-Fixancer' }));
+        elements.languageToggle.addEventListener('click', () => {
+            const nextLanguage = state.settings.uiLanguage === 'fa' ? 'en' : 'fa';
+            void updateSetting('uiLanguage', nextLanguage);
+        });
+        elements.donateButton.addEventListener('click', () => void copyDonationAddress());
+        elements.githubButton.addEventListener('click', () => {
+            void chrome.tabs.create({ url: 'https://github.com/Nishef1/RTL-Fixancer' });
+        });
     }
 
     document.addEventListener('DOMContentLoaded', () => {
