@@ -49,30 +49,52 @@
         '[class*="codemirror" i]', '[class*="monaco" i]'
     ].join(',');
 
+    const CHATGPT_CONTENT = [
+        '[data-message-author-role]',
+        '[data-testid*="conversation-turn" i]',
+        '[data-testid*="assistant-message" i]',
+        'article[data-testid*="conversation" i]',
+        '.markdown',
+        '.prose',
+        '[class*="markdown" i]',
+        '[class*="message-content" i]'
+    ].join(',');
+
     const SITE_ADAPTERS = [
         {
+            name: 'chatgpt',
             test: host => host === 'chatgpt.com' || host === 'chat.openai.com',
-            content: '[data-message-author-role], [data-testid="conversation-turn"], article[data-testid*="conversation" i]',
-            editor: '#prompt-textarea, [data-testid*="composer" i] [contenteditable="true"]'
+            content: CHATGPT_CONTENT,
+            messageRoot: CHATGPT_CONTENT,
+            editor: '#prompt-textarea, [data-testid*="composer" i] [contenteditable="true"]',
+            observedAttributes: ['data-message-author-role', 'data-testid']
         },
         {
+            name: 'perplexity',
             test: host => host === 'perplexity.ai' || host.endsWith('.perplexity.ai'),
             content: '.prose, [data-testid="answer"], [data-cplx-component="message-block-answer"], [class*="threadContent" i]',
+            messageRoot: '.prose, [data-testid="answer"], [data-cplx-component="message-block-answer"], [class*="threadContent" i]',
             editor: 'textarea, [contenteditable="true"], [role="textbox"]'
         },
         {
+            name: 'aistudio',
             test: host => host === 'aistudio.google.com' || host === 'makersuite.google.com',
             content: '.conversation-container, .chat-message, .message-content, .model-response, ms-chat-turn',
+            messageRoot: '.chat-message, .message-content, .model-response, ms-chat-turn',
             editor: 'ms-textarea textarea, textarea[aria-label*="prompt" i], [contenteditable="true"]'
         },
         {
+            name: 'gemini',
             test: host => host === 'gemini.google.com' || host.endsWith('.gemini.google.com'),
             content: 'message-content, .model-response-text, [data-test-id*="response" i], [class*="response-container" i]',
+            messageRoot: 'message-content, .model-response-text, [data-test-id*="response" i], [class*="response-container" i]',
             editor: 'rich-textarea [contenteditable="true"], textarea, [role="textbox"]'
         },
         {
+            name: 'deepseek',
             test: host => host === 'chat.deepseek.com' || host.endsWith('.deepseek.com'),
             content: '.ds-markdown, [class*="message" i] [class*="markdown" i], [class*="message-content" i]',
+            messageRoot: '.ds-markdown, [class*="message" i] [class*="markdown" i], [class*="message-content" i]',
             editor: 'textarea, [contenteditable="true"], [role="textbox"]'
         }
     ];
@@ -85,12 +107,13 @@
             this.observer = null;
             this.styleElement = null;
             this.queue = new Set();
+            this.dirtyRoots = new Set();
             this.scheduled = false;
             this.idleHandle = null;
             this.originalState = new WeakMap();
             this.touchedElements = new Set();
             this.signatures = new WeakMap();
-            this.stats = { processed: 0, restored: 0, queued: 0, errors: 0 };
+            this.stats = { processed: 0, restored: 0, queued: 0, roots: 0, errors: 0 };
 
             this.onInput = this.onInput.bind(this);
             this.onMutation = this.onMutation.bind(this);
@@ -153,12 +176,16 @@
         attachListeners() {
             this.observer?.disconnect();
             this.observer = new MutationObserver(this.onMutation);
+            const attributeFilter = [
+                'class', 'role', 'aria-hidden', 'contenteditable',
+                ...(this.adapter?.observedAttributes || [])
+            ];
             this.observer.observe(document.documentElement || document, {
                 subtree: true,
                 childList: true,
                 characterData: true,
                 attributes: true,
-                attributeFilter: ['class', 'role', 'aria-hidden', 'contenteditable']
+                attributeFilter: [...new Set(attributeFilter)]
             });
 
             document.addEventListener('input', this.onInput, true);
@@ -247,6 +274,20 @@
             this.styleElement = style;
         }
 
+        messageRootFor(element) {
+            if (!element || !this.adapter?.messageRoot) return null;
+            if (element.matches?.(this.adapter.messageRoot)) return element;
+            return element.closest?.(this.adapter.messageRoot) || null;
+        }
+
+        markMessageDirty(element) {
+            const root = this.messageRootFor(element);
+            if (!root || this.dirtyRoots.has(root)) return;
+            this.dirtyRoots.add(root);
+            this.stats.roots += 1;
+            this.schedule();
+        }
+
         enqueueCandidateAndBlock(element) {
             if (!element) return;
             const candidate = element.matches?.(CANDIDATE_SELECTOR)
@@ -258,6 +299,7 @@
                 ? element
                 : element.closest?.(BLOCK_SELECTOR);
             if (block && block !== candidate) this.enqueue(block);
+            this.markMessageDirty(element);
         }
 
         onMutation(mutations) {
@@ -278,6 +320,7 @@
                     continue;
                 }
 
+                this.markMessageDirty(mutation.target);
                 for (const node of mutation.addedNodes) {
                     if (node.nodeType === Node.TEXT_NODE) {
                         this.enqueueCandidateAndBlock(node.parentElement);
@@ -286,6 +329,7 @@
                     if (node.nodeType !== Node.ELEMENT_NODE) continue;
                     this.scan(node);
                     this.scanEditors(node);
+                    this.enqueueCandidateAndBlock(node);
                     this.enqueueCandidateAndBlock(node.parentElement);
                 }
             }
@@ -316,7 +360,7 @@
             this.scheduled = true;
             const run = deadline => this.flush(deadline);
             if (typeof requestIdleCallback === 'function') {
-                this.idleHandle = requestIdleCallback(run, { timeout: 250 });
+                this.idleHandle = requestIdleCallback(run, { timeout: 180 });
             } else {
                 this.idleHandle = setTimeout(() => run(null), 0);
             }
@@ -327,6 +371,18 @@
             this.idleHandle = null;
             if (!this.active) return;
 
+            let rootsProcessed = 0;
+            for (const root of this.dirtyRoots) {
+                this.dirtyRoots.delete(root);
+                if (root.isConnected) {
+                    this.scan(root);
+                    this.scanEditors(root);
+                }
+                rootsProcessed += 1;
+                if (rootsProcessed >= 8) break;
+                if (deadline && !deadline.didTimeout && deadline.timeRemaining() < 3) break;
+            }
+
             let processed = 0;
             for (const element of this.queue) {
                 this.queue.delete(element);
@@ -335,7 +391,7 @@
                 if (processed >= 250) break;
                 if (deadline && !deadline.didTimeout && deadline.timeRemaining() < 2) break;
             }
-            if (this.queue.size > 0) this.schedule();
+            if (this.dirtyRoots.size > 0 || this.queue.size > 0) this.schedule();
         }
 
         isInContentArea(element) {
@@ -563,6 +619,7 @@
             document.removeEventListener('focusin', this.onInput, true);
             this.cancelScheduledWork();
             this.queue.clear();
+            this.dirtyRoots.clear();
             this.restoreAll();
             this.styleElement?.remove();
             this.styleElement = null;
@@ -580,7 +637,8 @@
                 active: this.active,
                 hostname: location.hostname,
                 touched: this.touchedElements.size,
-                queuedNow: this.queue.size
+                queuedNow: this.queue.size,
+                dirtyRootsNow: this.dirtyRoots.size
             };
         }
 
