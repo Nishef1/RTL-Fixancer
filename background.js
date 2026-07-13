@@ -111,6 +111,22 @@ async function sendToTab(tabId, message) {
     }
 }
 
+async function cleanupOpenTabs(hostname, explicitTabId = null) {
+    const host = Core.normalizeHostname(hostname);
+    if (!host) return;
+    const tabIds = new Set();
+    const directId = normalizeTabId(explicitTabId);
+    if (directId !== null) tabIds.add(directId);
+    try {
+        const tabs = await chrome.tabs.query({ url: Core.matchPatternsForHost(host) });
+        for (const tab of tabs) {
+            const id = normalizeTabId(tab.id);
+            if (id !== null) tabIds.add(id);
+        }
+    } catch (_) {}
+    await Promise.all([...tabIds].map(tabId => sendToTab(tabId, { type: 'runtime:cleanup' })));
+}
+
 async function injectRuntime(tabId) {
     const id = normalizeTabId(tabId);
     if (id === null) throw new Error('A valid tab is required.');
@@ -159,6 +175,7 @@ async function setSiteEnabled({ hostname, enabled, tabId = null }) {
 
     let settings = await readSettings();
     const sites = new Set(settings.enabledSites);
+    let permissionHost = host;
 
     if (enabled) {
         if (!await hasPermissionForHost(host)) {
@@ -169,15 +186,14 @@ async function setSiteEnabled({ hostname, enabled, tabId = null }) {
         sites.add(host);
     } else {
         const matched = Core.findMatchingSite([...sites], host);
-        if (matched) sites.delete(matched);
+        if (matched) {
+            sites.delete(matched);
+            permissionHost = matched;
+        }
+        await cleanupOpenTabs(permissionHost, tabId);
     }
 
     settings = await writeSettings({ ...settings, enabledSites: [...sites] });
-
-    if (!enabled) {
-        await sendToTab(tabId, { type: 'runtime:cleanup' });
-    }
-
     await syncRegistrations(settings);
 
     if (enabled && tabId !== null) {
@@ -186,7 +202,7 @@ async function setSiteEnabled({ hostname, enabled, tabId = null }) {
     }
 
     if (!enabled) {
-        await removeUnusedHostPermission(host, settings.enabledSites);
+        await removeUnusedHostPermission(permissionHost, settings.enabledSites);
     }
 
     await updateIcon(tabId, host, settings);
