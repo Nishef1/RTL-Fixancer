@@ -9,7 +9,7 @@ Version 4.0 replaces the legacy all-site runtime with a permission-first archite
 - No static `<all_urls>` content script.
 - No permanent access to every website at install time.
 - Chrome asks for access only when the user enables a site.
-- Content scripts are registered dynamically for enabled domains.
+- Content scripts are registered dynamically for enabled hostnames.
 - Only the top frame is processed.
 - One event-driven `MutationObserver` replaces recurring DOM polling.
 - Every changed attribute is captured and restored when the site is disabled.
@@ -49,7 +49,7 @@ This runs manifest/source validation and the core unit tests. After runtime chan
 
 ## Privacy and security
 
-RTL Fixancer works locally. It does not include analytics, remote code, network APIs, or page-content uploads. Host access is optional and requested only for domains explicitly enabled by the user.
+RTL Fixancer works locally. It does not include analytics, remote code, network APIs, or page-content uploads. Host access is optional and requested only for hostnames explicitly enabled by the user.
 
 The only web-accessible files are the bundled Vazir and Shabnam font files.
 
