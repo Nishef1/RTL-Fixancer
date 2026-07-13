@@ -1,0 +1,14 @@
+{
+  "name": "rtl-fixancer",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "validate": "node scripts/validate.mjs",
+    "check": "npm run validate && npm test"
+  }
+}
