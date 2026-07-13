@@ -297,9 +297,16 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     })().catch(error => console.error('RTL Fixancer context-menu action failed:', error));
 });
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     void (async () => {
         switch (message?.type) {
+            case 'runtime:state': {
+                const tabId = normalizeTabId(sender?.tab?.id);
+                if (tabId !== null) {
+                    await chrome.action.setIcon({ tabId, path: getIconPaths(Boolean(message.active)) });
+                }
+                return { ok: true };
+            }
             case 'settings:get':
                 return { ok: true, settings: await readSettings() };
             case 'settings:update':
@@ -331,6 +338,16 @@ chrome.permissions.onAdded.addListener(() => {
     void syncRegistrations().catch(error => console.error('RTL Fixancer permission sync failed:', error));
 });
 
-chrome.permissions.onRemoved.addListener(() => {
-    void syncRegistrations().catch(error => console.error('RTL Fixancer permission sync failed:', error));
+chrome.permissions.onRemoved.addListener(removed => {
+    void (async () => {
+        const removedOrigins = new Set(removed?.origins || []);
+        const settings = await readSettings();
+        const enabledSites = settings.enabledSites.filter(hostname =>
+            !Core.matchPatternsForHost(hostname).some(origin => removedOrigins.has(origin))
+        );
+        if (enabledSites.length !== settings.enabledSites.length) {
+            await writeSettings({ ...settings, enabledSites });
+        }
+        await syncRegistrations();
+    })().catch(error => console.error('RTL Fixancer permission sync failed:', error));
 });
