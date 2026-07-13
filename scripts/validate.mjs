@@ -34,6 +34,7 @@ assert(background.includes("runAt: 'document_idle'"), 'Dynamic scripts should ru
 assert(background.includes('registerContentScripts'), 'Dynamic content-script registration is required.');
 assert(background.includes('cleanupOpenTabs'), 'Disabling a site must clean already-open matching tabs.');
 assert(background.includes('chrome.permissions.onRemoved'), 'Permission changes must resynchronize dynamic registrations.');
+assert(background.includes("case 'runtime:state'"), 'Tab icon state must be driven without the broad tabs permission.');
 
 const content = await read('content.js');
 assert(content.includes('MutationObserver'), 'The content runtime must be event driven.');
