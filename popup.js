@@ -93,8 +93,11 @@
 
     const elements = {};
 
-    function $(id) {
-        return document.getElementById(id);
+    function $(selectorOrId) {
+        if (selectorOrId.startsWith('#') || selectorOrId.startsWith('.')) {
+            return document.querySelector(selectorOrId);
+        }
+        return document.getElementById(selectorOrId);
     }
 
     function collectElements() {
