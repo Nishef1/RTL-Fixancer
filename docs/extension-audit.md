@@ -71,3 +71,6 @@ Appearance-only setting changes update runtime styles without restoring and resc
 Injected page runtimes report their implementation version. Re-apply and enable operations only reuse a runtime when that version matches the current extension core; otherwise the current files are injected, the older runtime removes its listeners and restores its DOM changes, and the new runtime replaces it. This prevents already-open tabs from silently continuing to run code from an older extension update.
 
 Site enable/disable operations are serialized as whole operations, including permission removal and runtime injection. Permission revocation from Chrome settings removes the affected hostname from storage, sends a host-scoped cleanup message to existing page runtimes, and then resynchronizes dynamic registrations.
+
+
+On extension install/update, already-open enabled tabs are refreshed automatically. The service worker queries only enabled hosts for which permission is still granted and performs the same version handshake, so a site-specific fix does not require a manual page refresh before it can take effect.
