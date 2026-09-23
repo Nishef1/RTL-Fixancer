@@ -38,6 +38,7 @@ Then load the repository root as an unpacked extension and verify:
 - enabling a site requests only that site's permission;
 - disabling restores existing `dir` and extension attributes without refreshing;
 - Persian, Arabic, and Hebrew text becomes RTL;
+- X/Twitter applies RTL to the `[data-testid="tweetText"]` block instead of only its inner spans;
 - English, code blocks, sidebars, headers, and tool controls remain unchanged;
 - streaming and recycled chat messages are reprocessed without polling;
 - popup settings, Re-apply, context-menu actions, and Print / PDF work;
