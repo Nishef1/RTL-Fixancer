@@ -38,6 +38,7 @@ assert(background.includes("case 'runtime:state'"), 'Tab icon state must be driv
 assert(background.includes('settingsMutationQueue'), 'Settings mutations must be serialized to prevent lost updates.');
 assert(background.includes('siteOperationQueue'), 'Site enable/disable operations must be serialized end to end.');
 assert(background.includes('ping.version === expectedVersion'), 'Existing tabs must upgrade stale injected runtimes.');
+assert(background.includes('refreshOpenEnabledTabs'), 'Extension updates must refresh runtimes in already-open enabled tabs.');
 assert(background.includes("type: 'runtime:cleanup', hostname: host"), 'Permission cleanup must be host-scoped.');
 assert(background.includes('chrome.tabs.onUpdated'), 'Per-tab icon state must reset when navigation begins.');
 assert(!background.includes('syncRegistrations(Core.normalizeSettings'), 'Registration sync must read the latest stored settings.');
