@@ -9,6 +9,10 @@ context.globalThis = context;
 vm.runInContext(source, context, { filename: 'lib/core.js' });
 const Core = context.RTLFixancerCore;
 
+test('exposes the current core runtime version', () => {
+    assert.equal(Core.version, '4.1.4');
+});
+
 test('normalizes hostnames and rejects invalid values', () => {
     assert.equal(Core.normalizeHostname('..ChatGPT.COM.'), 'chatgpt.com');
     assert.equal(Core.normalizeHostname(null), '');
