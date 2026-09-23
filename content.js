@@ -19,7 +19,8 @@
 
     const BLOCK_SELECTOR = [
         'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'td', 'th',
-        'blockquote', 'figcaption', 'caption', 'summary', 'dd', 'dt', 'address', 'output'
+        'blockquote', 'figcaption', 'caption', 'summary', 'dd', 'dt', 'address', 'output',
+        '[data-testid="tweetText"]'
     ].join(',');
     const INLINE_SELECTOR = [
         'span', 'a', 'cite', 'q', 'em', 'strong', 'b', 'i', 'u', 'mark',
@@ -61,6 +62,14 @@
     ].join(',');
 
     const SITE_ADAPTERS = [
+        {
+            name: 'x',
+            test: host => host === 'x.com' || host.endsWith('.x.com')
+                || host === 'twitter.com' || host.endsWith('.twitter.com'),
+            content: '[data-testid="tweetText"]',
+            messageRoot: '[data-testid="tweetText"]',
+            editor: '[data-testid="tweetTextarea_0"], [data-testid="dmComposerTextInput"]'
+        },
         {
             name: 'chatgpt',
             test: host => host === 'chatgpt.com' || host === 'chat.openai.com',
@@ -111,6 +120,7 @@
             this.scheduled = false;
             this.idleHandle = null;
             this.originalState = new WeakMap();
+            this.appliedState = new WeakMap();
             this.touchedElements = new Set();
             this.signatures = new WeakMap();
             this.stats = { processed: 0, restored: 0, queued: 0, roots: 0, errors: 0 };
@@ -469,11 +479,10 @@
                     return;
                 }
 
-                this.captureElement(element);
-                element.removeAttribute(LTR_ATTR);
-                element.setAttribute(MARK_ATTR, 'rtl');
-                element.setAttribute(LANGUAGE_ATTR, result.language || 'ar');
-                element.setAttribute('dir', 'rtl');
+                this.removeOwnedAttribute(element, LTR_ATTR);
+                this.setOwnedAttribute(element, MARK_ATTR, 'rtl');
+                this.setOwnedAttribute(element, LANGUAGE_ATTR, result.language || 'ar');
+                this.setOwnedAttribute(element, 'dir', 'rtl');
                 this.stats.processed += 1;
 
                 const list = element.closest(LIST_SELECTOR);
@@ -484,11 +493,10 @@
         }
 
         markLtrInline(element) {
-            this.captureElement(element);
-            element.removeAttribute(MARK_ATTR);
-            element.removeAttribute(LANGUAGE_ATTR);
-            element.setAttribute(LTR_ATTR, 'true');
-            element.setAttribute('dir', 'ltr');
+            this.removeOwnedAttribute(element, MARK_ATTR);
+            this.removeOwnedAttribute(element, LANGUAGE_ATTR);
+            this.setOwnedAttribute(element, LTR_ATTR, 'true');
+            this.setOwnedAttribute(element, 'dir', 'ltr');
         }
 
         listHasRtlContent(list) {
@@ -504,9 +512,8 @@
         syncListContainer(list) {
             if (!list?.isConnected) return;
             if (this.listHasRtlContent(list)) {
-                this.captureElement(list);
-                list.setAttribute(LIST_ATTR, 'rtl');
-                list.setAttribute('dir', 'rtl');
+                this.setOwnedAttribute(list, LIST_ATTR, 'rtl');
+                this.setOwnedAttribute(list, 'dir', 'rtl');
             } else if (this.originalState.has(list)) {
                 this.restoreElement(list, { syncList: false });
             }
@@ -534,10 +541,9 @@
                     this.restoreElement(element);
                     return;
                 }
-                this.captureElement(element);
-                element.setAttribute(INPUT_ATTR, 'rtl');
-                element.setAttribute(LANGUAGE_ATTR, result.language || 'ar');
-                element.setAttribute('dir', 'rtl');
+                this.setOwnedAttribute(element, INPUT_ATTR, 'rtl');
+                this.setOwnedAttribute(element, LANGUAGE_ATTR, result.language || 'ar');
+                this.setOwnedAttribute(element, 'dir', 'rtl');
             } catch (_) {
                 this.stats.errors += 1;
             }
@@ -561,18 +567,47 @@
             this.touchedElements.add(element);
         }
 
+        appliedAttributes(element) {
+            let applied = this.appliedState.get(element);
+            if (!applied) {
+                applied = new Map();
+                this.appliedState.set(element, applied);
+            }
+            return applied;
+        }
+
+        setOwnedAttribute(element, name, value) {
+            this.captureElement(element);
+            const normalized = String(value);
+            this.appliedAttributes(element).set(name, { present: true, value: normalized });
+            element.setAttribute(name, normalized);
+        }
+
+        removeOwnedAttribute(element, name) {
+            this.captureElement(element);
+            this.appliedAttributes(element).set(name, { present: false, value: null });
+            element.removeAttribute(name);
+        }
+
         restoreElement(element, { syncList = true } = {}) {
             const snapshot = this.originalState.get(element);
             if (!snapshot) return;
+            const applied = this.appliedState.get(element);
             const list = syncList && !element.matches?.(LIST_SELECTOR) ? element.closest?.(LIST_SELECTOR) : null;
 
             for (const [name, state] of Object.entries(snapshot)) {
-                if (name === 'dir' && !['rtl', 'ltr'].includes(element.getAttribute('dir'))) continue;
+                const owned = applied?.get(name);
+                if (!owned) continue;
+                const stillOwned = owned.present
+                    ? element.hasAttribute(name) && element.getAttribute(name) === owned.value
+                    : !element.hasAttribute(name);
+                if (!stillOwned) continue;
                 if (state.present) element.setAttribute(name, state.value ?? '');
                 else element.removeAttribute(name);
             }
 
             this.originalState.delete(element);
+            this.appliedState.delete(element);
             this.touchedElements.delete(element);
             this.signatures.delete(element);
             this.stats.restored += 1;
@@ -586,6 +621,7 @@
                 else {
                     this.touchedElements.delete(element);
                     this.originalState.delete(element);
+                    this.appliedState.delete(element);
                     this.signatures.delete(element);
                 }
             }
@@ -597,6 +633,7 @@
                 if (!element.isConnected) {
                     this.touchedElements.delete(element);
                     this.originalState.delete(element);
+                    this.appliedState.delete(element);
                     this.signatures.delete(element);
                 }
             }
@@ -642,9 +679,27 @@
             };
         }
 
+        async applySettings(nextSettings) {
+            const next = Core.normalizeSettings(nextSettings);
+            const wasAllowed = this.isAllowed();
+            const detectionChanged = next.detectionMode !== this.settings.detectionMode;
+            const appearanceChanged = next.selectedFont !== this.settings.selectedFont
+                || next.fontSize !== this.settings.fontSize;
+            this.settings = next;
+            const isAllowed = this.isAllowed();
+
+            if (!isAllowed) {
+                if (this.active || wasAllowed) this.cleanup({ keepRuntimeListeners: true });
+                return false;
+            }
+            if (!this.active || detectionChanged) return this.restart(next);
+            if (appearanceChanged) this.installStyles();
+            return true;
+        }
+
         onStorageChanged(changes, areaName) {
             if (areaName !== 'sync' || !changes[STORAGE_KEY]) return;
-            void this.restart(Core.normalizeSettings(changes[STORAGE_KEY].newValue));
+            void this.applySettings(changes[STORAGE_KEY].newValue);
         }
 
         onMessage(message, _sender, sendResponse) {
