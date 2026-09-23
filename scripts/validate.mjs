@@ -8,7 +8,7 @@ const read = relative => readFile(path.join(root, relative), 'utf8');
 const manifest = JSON.parse(await read('manifest.json'));
 
 assert.equal(manifest.manifest_version, 3, 'Manifest V3 is required.');
-assert.equal(manifest.version, '4.1.2');
+assert.equal(manifest.version, '4.1.3');
 assert.equal(manifest.background?.service_worker, 'background.js');
 assert.equal(manifest.content_scripts, undefined, 'Static all-site content scripts are forbidden.');
 assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
@@ -35,6 +35,9 @@ assert(background.includes('registerContentScripts'), 'Dynamic content-script re
 assert(background.includes('cleanupOpenTabs'), 'Disabling a site must clean already-open matching tabs.');
 assert(background.includes('chrome.permissions.onRemoved'), 'Permission changes must resynchronize dynamic registrations.');
 assert(background.includes("case 'runtime:state'"), 'Tab icon state must be driven without the broad tabs permission.');
+assert(background.includes('settingsMutationQueue'), 'Settings mutations must be serialized to prevent lost updates.');
+assert(background.includes('chrome.tabs.onUpdated'), 'Per-tab icon state must reset when navigation begins.');
+assert(!background.includes('syncRegistrations(Core.normalizeSettings'), 'Registration sync must read the latest stored settings.');
 
 const core = await read('lib/core.js');
 assert(core.includes('`http://${host}/*`'), 'Runtime host requests must use the declared HTTP scheme.');
@@ -61,6 +64,11 @@ assert(content.includes('messageRootFor'), 'Live chat mutations must resolve the
 assert(content.includes('markMessageDirty'), 'Live message roots must be queued for reprocessing.');
 assert(content.includes('this.dirtyRoots = new Set()'), 'Message-root reprocessing must be deduplicated.');
 assert(content.includes('this.dirtyRoots.clear()'), 'Message-root work must be cancelled during cleanup.');
+assert(content.includes("name: 'x'"), 'X/Twitter requires a dedicated content boundary.');
+assert(content.includes('[data-testid="tweetText"]'), 'X/Twitter tweet blocks must be processed as block candidates.');
+assert(content.includes('this.appliedState = new WeakMap()'), 'DOM restoration must track extension-owned attribute values.');
+assert(content.includes('setOwnedAttribute'), 'DOM writes must record extension ownership before cleanup.');
+assert(content.includes('async applySettings(nextSettings)'), 'Storage changes should avoid unnecessary full runtime restarts.');
 
 const popupHtml = await read('popup.html');
 const popupCss = await read('popup.css');
@@ -74,4 +82,4 @@ assert(popupCss.includes('grid-template-columns: repeat(3, minmax(0, 1fr))'), 'S
 assert(!popupJs.includes('innerHTML'), 'Popup DOM must not be assembled with innerHTML.');
 assert(popupJs.includes('createTrashIcon'), 'Dynamic site actions must use the shared SVG icon builder.');
 
-console.log('Validation passed: permissions, bidi isolation, live chat streaming, RTL lists, popup design, and source safety checks are valid.');
+console.log('Validation passed: permissions, X/Twitter blocks, reversible DOM ownership, serialized settings, live chat streaming, RTL lists, popup design, and source safety checks are valid.');
