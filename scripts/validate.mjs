@@ -8,7 +8,7 @@ const read = relative => readFile(path.join(root, relative), 'utf8');
 const manifest = JSON.parse(await read('manifest.json'));
 
 assert.equal(manifest.manifest_version, 3, 'Manifest V3 is required.');
-assert.equal(manifest.version, '4.1.3');
+assert.equal(manifest.version, '4.1.4');
 assert.equal(manifest.background?.service_worker, 'background.js');
 assert.equal(manifest.content_scripts, undefined, 'Static all-site content scripts are forbidden.');
 assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
@@ -36,6 +36,9 @@ assert(background.includes('cleanupOpenTabs'), 'Disabling a site must clean alre
 assert(background.includes('chrome.permissions.onRemoved'), 'Permission changes must resynchronize dynamic registrations.');
 assert(background.includes("case 'runtime:state'"), 'Tab icon state must be driven without the broad tabs permission.');
 assert(background.includes('settingsMutationQueue'), 'Settings mutations must be serialized to prevent lost updates.');
+assert(background.includes('siteOperationQueue'), 'Site enable/disable operations must be serialized end to end.');
+assert(background.includes('ping.version === expectedVersion'), 'Existing tabs must upgrade stale injected runtimes.');
+assert(background.includes("type: 'runtime:cleanup', hostname: host"), 'Permission cleanup must be host-scoped.');
 assert(background.includes('chrome.tabs.onUpdated'), 'Per-tab icon state must reset when navigation begins.');
 assert(!background.includes('syncRegistrations(Core.normalizeSettings'), 'Registration sync must read the latest stored settings.');
 
@@ -69,6 +72,9 @@ assert(content.includes('[data-testid="tweetText"]'), 'X/Twitter tweet blocks mu
 assert(content.includes('this.appliedState = new WeakMap()'), 'DOM restoration must track extension-owned attribute values.');
 assert(content.includes('setOwnedAttribute'), 'DOM writes must record extension ownership before cleanup.');
 assert(content.includes('async applySettings(nextSettings)'), 'Storage changes should avoid unnecessary full runtime restarts.');
+assert(content.includes('existingRuntime.version === RUNTIME_VERSION'), 'Injected runtime replacement must be version aware.');
+assert(content.includes('version: this.version'), 'Runtime ping must report its implementation version.');
+assert(content.includes('requestedHost'), 'Cleanup messages must be scoped to the requested host.');
 
 const popupHtml = await read('popup.html');
 const popupCss = await read('popup.css');
