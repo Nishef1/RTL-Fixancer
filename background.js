@@ -341,6 +341,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'sync' || !changes[STORAGE_KEY]) return;
+    const previous = Core.normalizeSettings(changes[STORAGE_KEY].oldValue);
+    const next = Core.normalizeSettings(changes[STORAGE_KEY].newValue);
+    if (JSON.stringify(previous.enabledSites) === JSON.stringify(next.enabledSites)) return;
     void syncRegistrations()
         .catch(error => console.error('RTL Fixancer registration sync failed:', error));
 });
