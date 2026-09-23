@@ -4,10 +4,18 @@
     const INSTANCE_KEY = '__RTL_FIXANCER_RUNTIME_V4__';
     const Core = globalThis.RTLFixancerCore;
     if (!Core) return;
+    const RUNTIME_VERSION = Core.version || 'unknown';
 
-    if (globalThis[INSTANCE_KEY]) {
-        void globalThis[INSTANCE_KEY].restart();
-        return;
+    const existingRuntime = globalThis[INSTANCE_KEY];
+    if (existingRuntime) {
+        if (existingRuntime.version === RUNTIME_VERSION) {
+            void existingRuntime.restart();
+            return;
+        }
+        try {
+            existingRuntime.cleanup?.({ keepRuntimeListeners: false });
+        } catch (_) {}
+        delete globalThis[INSTANCE_KEY];
     }
 
     const STORAGE_KEY = 'settings';
@@ -111,6 +119,7 @@
 
     class RTLFixancerRuntime {
         constructor() {
+            this.version = RUNTIME_VERSION;
             this.active = false;
             this.settings = Core.DEFAULT_SETTINGS;
             this.adapter = SITE_ADAPTERS.find(candidate => candidate.test(location.hostname)) || null;
@@ -707,14 +716,19 @@
             void (async () => {
                 switch (message?.type) {
                     case 'runtime:ping':
-                        return { ok: true, stats: this.getStats() };
+                        return { ok: true, version: this.version, stats: this.getStats() };
                     case 'runtime:settings':
                     case 'runtime:reapply':
                         await this.restart(message.settings || null);
                         return { ok: true, stats: this.getStats() };
-                    case 'runtime:cleanup':
+                    case 'runtime:cleanup': {
+                        const requestedHost = Core.normalizeHostname(message.hostname || '');
+                        if (requestedHost && requestedHost !== Core.normalizeHostname(location.hostname)) {
+                            return { ok: true, skipped: true };
+                        }
                         this.cleanup({ keepRuntimeListeners: true });
                         return { ok: true };
+                    }
                     case 'runtime:print':
                         window.print();
                         return { ok: true };
