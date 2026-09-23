@@ -7,6 +7,7 @@ const CONTENT_FILES = Object.freeze(['lib/core.js', 'content.js']);
 const REGISTRATION_PREFIX = 'rtl-fixancer-';
 const STORAGE_KEY = 'settings';
 let registrationSyncQueue = Promise.resolve();
+let settingsMutationQueue = Promise.resolve();
 
 function getIconPaths(enabled) {
     const state = enabled ? 'on' : 'off';
@@ -27,6 +28,17 @@ async function writeSettings(settings) {
     const normalized = Core.normalizeSettings(settings);
     await chrome.storage.sync.set({ [STORAGE_KEY]: normalized });
     return normalized;
+}
+
+function mutateSettings(mutator) {
+    const run = async () => {
+        const current = await readSettings();
+        const candidate = await mutator(current);
+        if (candidate === null) return current;
+        return writeSettings(candidate);
+    };
+    settingsMutationQueue = settingsMutationQueue.then(run, run);
+    return settingsMutationQueue;
 }
 
 async function hasPermissionForHost(hostname) {
@@ -62,8 +74,8 @@ function sameRegistration(current, desired) {
         && (current.world || 'ISOLATED') === desired.world;
 }
 
-async function syncRegistrationsNow(settings = null) {
-    const normalized = settings || await readSettings();
+async function syncRegistrationsNow() {
+    const normalized = await readSettings();
     const current = await chrome.scripting.getRegisteredContentScripts();
     const managed = new Map(
         current
@@ -91,8 +103,8 @@ async function syncRegistrationsNow(settings = null) {
     return desired;
 }
 
-function syncRegistrations(settings = null) {
-    const run = () => syncRegistrationsNow(settings);
+function syncRegistrations() {
+    const run = () => syncRegistrationsNow();
     registrationSyncQueue = registrationSyncQueue.then(run, run);
     return registrationSyncQueue;
 }
@@ -117,13 +129,15 @@ async function cleanupOpenTabs(hostname, explicitTabId = null) {
     const tabIds = new Set();
     const directId = normalizeTabId(explicitTabId);
     if (directId !== null) tabIds.add(directId);
-    try {
-        const tabs = await chrome.tabs.query({ url: Core.matchPatternsForHost(host) });
-        for (const tab of tabs) {
-            const id = normalizeTabId(tab.id);
-            if (id !== null) tabIds.add(id);
-        }
-    } catch (_) {}
+    if (await hasPermissionForHost(host)) {
+        try {
+            const tabs = await chrome.tabs.query({ url: Core.matchPatternsForHost(host) });
+            for (const tab of tabs) {
+                const id = normalizeTabId(tab.id);
+                if (id !== null) tabIds.add(id);
+            }
+        } catch (_) {}
+    }
     await Promise.all([...tabIds].map(tabId => sendToTab(tabId, { type: 'runtime:cleanup' })));
 }
 
@@ -170,28 +184,20 @@ async function setSiteEnabled({ hostname, enabled, tabId = null }) {
     const host = Core.normalizeHostname(hostname);
     if (!host) throw new Error('Invalid hostname.');
 
-    let settings = await readSettings();
-    const sites = new Set(settings.enabledSites);
-    let permissionHost = host;
-
-    if (enabled) {
-        if (!await hasPermissionForHost(host)) {
-            const error = new Error('Site permission has not been granted.');
-            error.code = 'HOST_PERMISSION_REQUIRED';
-            throw error;
-        }
-        sites.add(host);
-    } else {
-        const matched = Core.findMatchingSite([...sites], host);
-        if (matched) {
-            sites.delete(matched);
-            permissionHost = matched;
-        }
-        await cleanupOpenTabs(permissionHost, tabId);
+    if (enabled && !await hasPermissionForHost(host)) {
+        const error = new Error('Site permission has not been granted.');
+        error.code = 'HOST_PERMISSION_REQUIRED';
+        throw error;
     }
+    if (!enabled) await cleanupOpenTabs(host, tabId);
 
-    settings = await writeSettings({ ...settings, enabledSites: [...sites] });
-    await syncRegistrations(settings);
+    const settings = await mutateSettings(current => {
+        const sites = new Set(current.enabledSites);
+        if (enabled) sites.add(host);
+        else sites.delete(host);
+        return { ...current, enabledSites: [...sites] };
+    });
+    await syncRegistrations();
 
     if (enabled && tabId !== null) {
         await ensureRuntime(tabId);
@@ -199,7 +205,7 @@ async function setSiteEnabled({ hostname, enabled, tabId = null }) {
     }
 
     if (!enabled) {
-        await removeUnusedHostPermission(permissionHost, settings.enabledSites);
+        await removeUnusedHostPermission(host, settings.enabledSites);
     }
 
     await updateIcon(tabId, host, settings);
@@ -207,12 +213,11 @@ async function setSiteEnabled({ hostname, enabled, tabId = null }) {
 }
 
 async function updateSettings(patch) {
-    const current = await readSettings();
     const allowedPatch = {};
     for (const key of ['selectedFont', 'fontSize', 'detectionMode', 'uiLanguage']) {
         if (Object.prototype.hasOwnProperty.call(patch || {}, key)) allowedPatch[key] = patch[key];
     }
-    return writeSettings({ ...current, ...allowedPatch });
+    return mutateSettings(current => ({ ...current, ...allowedPatch }));
 }
 
 async function getSiteStatus(hostname) {
@@ -297,6 +302,12 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     })().catch(error => console.error('RTL Fixancer context-menu action failed:', error));
 });
 
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status !== 'loading') return;
+    void chrome.action.setIcon({ tabId, path: getIconPaths(false) })
+        .catch(error => console.error('RTL Fixancer navigation icon reset failed:', error));
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     void (async () => {
         switch (message?.type) {
@@ -330,7 +341,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'sync' || !changes[STORAGE_KEY]) return;
-    void syncRegistrations(Core.normalizeSettings(changes[STORAGE_KEY].newValue))
+    void syncRegistrations()
         .catch(error => console.error('RTL Fixancer registration sync failed:', error));
 });
 
@@ -341,13 +352,13 @@ chrome.permissions.onAdded.addListener(() => {
 chrome.permissions.onRemoved.addListener(removed => {
     void (async () => {
         const removedOrigins = new Set(removed?.origins || []);
-        const settings = await readSettings();
-        const enabledSites = settings.enabledSites.filter(hostname =>
-            !Core.matchPatternsForHost(hostname).some(origin => removedOrigins.has(origin))
-        );
-        if (enabledSites.length !== settings.enabledSites.length) {
-            await writeSettings({ ...settings, enabledSites });
-        }
+        await mutateSettings(settings => {
+            const enabledSites = settings.enabledSites.filter(hostname =>
+                !Core.matchPatternsForHost(hostname).some(origin => removedOrigins.has(origin))
+            );
+            if (enabledSites.length === settings.enabledSites.length) return null;
+            return { ...settings, enabledSites };
+        });
         await syncRegistrations();
     })().catch(error => console.error('RTL Fixancer permission sync failed:', error));
 });
