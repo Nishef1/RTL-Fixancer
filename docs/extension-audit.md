@@ -64,3 +64,10 @@ Settings writes are serialized through a service-worker mutation queue so popup,
 Per-tab toolbar icons are reset to the inactive icon when a navigation enters the loading state; an enabled page's content runtime sets the active icon again after injection. This keeps tab-specific icon state from leaking across navigations without adding the broad `tabs` permission.
 
 Appearance-only setting changes update runtime styles without restoring and rescanning the full document. Detection-mode changes still perform a full reversible reclassification.
+
+
+## Runtime upgrade handshake
+
+Injected page runtimes report their implementation version. Re-apply and enable operations only reuse a runtime when that version matches the current extension core; otherwise the current files are injected, the older runtime removes its listeners and restores its DOM changes, and the new runtime replaces it. This prevents already-open tabs from silently continuing to run code from an older extension update.
+
+Site enable/disable operations are serialized as whole operations, including permission removal and runtime injection. Permission revocation from Chrome settings removes the affected hostname from storage, sends a host-scoped cleanup message to existing page runtimes, and then resynchronizes dynamic registrations.
