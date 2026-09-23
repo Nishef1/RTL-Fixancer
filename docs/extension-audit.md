@@ -1,6 +1,6 @@
 # RTL Fixancer 4.0 Architecture Audit
 
-Date: 2026-07-13
+Date: 2026-09-23
 
 ## Security boundary
 
@@ -15,9 +15,9 @@ Date: 2026-07-13
 
 ## Runtime model
 
-`content.js` uses one `MutationObserver`, an idle-work queue, and delegated editor events. It contains no interval-based DOM scanning. Candidate elements are text-bearing leaves; structural UI, code, embedded content, and navigation are skipped.
+`content.js` uses one `MutationObserver`, an idle-work queue, and delegated editor events. It contains no interval-based DOM scanning. Candidate elements are text-bearing leaves; structural UI, code, embedded content, and navigation are skipped. X/Twitter is handled by a narrow adapter that promotes `[data-testid="tweetText"]` to a block candidate so native `dir="auto"` tweet containers are aligned as a block instead of modifying only an inner span.
 
-Before setting `dir` or extension data attributes, the runtime records whether each attribute existed and its exact original value. A site disable, settings restart, or runtime cleanup restores that snapshot instead of blindly deleting host-page state. If the host changes `dir` after RTL Fixancer applied its own value, cleanup preserves the newer host value.
+Before setting `dir` or extension data attributes, the runtime records whether each attribute existed and its exact original value. It also records the last value written by RTL Fixancer. Cleanup restores an original attribute only when the current DOM value is still the value owned by the extension, so a newer host-page `dir` value is preserved.
 
 ## Permission lifecycle
 
@@ -51,7 +51,16 @@ Unregistering alone is intentionally not treated as cleanup because already-inje
 - Confirm an unenabled site receives no content runtime.
 - Confirm exact DOM restoration without page reload.
 - Test Persian, Arabic, Hebrew, mixed text, inputs, code blocks, and lists.
-- Test ChatGPT, Gemini, Google AI Studio, Perplexity, DeepSeek, and a generic site.
+- Test X/Twitter, ChatGPT, Gemini, Google AI Studio, Perplexity, DeepSeek, and a generic site.
 - Test streaming and virtualized/recycled messages.
 - Restart Chrome and verify enabled-site registrations persist.
 - Test popup keyboard navigation, dark mode, RTL popup language, reduced motion, context menus, and Print / Save as PDF.
+
+
+## Concurrency and navigation hardening
+
+Settings writes are serialized through a service-worker mutation queue so popup, context-menu, and permission events cannot overwrite each other's read-modify-write updates. Dynamic-registration synchronization always reads the latest stored settings when its queued turn begins, preventing stale storage events from restoring an older registration set.
+
+Per-tab toolbar icons are reset to the inactive icon when a navigation enters the loading state; an enabled page's content runtime sets the active icon again after injection. This keeps tab-specific icon state from leaking across navigations without adding the broad `tabs` permission.
+
+Appearance-only setting changes update runtime styles without restoring and rescanning the full document. Detection-mode changes still perform a full reversible reclassification.
