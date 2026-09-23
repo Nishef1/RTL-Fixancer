@@ -175,6 +175,26 @@ async function ensureRuntime(tabId) {
     return refreshed;
 }
 
+async function refreshOpenEnabledTabs(settings = null) {
+    const currentSettings = settings || await readSettings();
+    for (const hostname of currentSettings.enabledSites) {
+        if (!await hasPermissionForHost(hostname)) continue;
+        let tabs = [];
+        try {
+            tabs = await chrome.tabs.query({ url: Core.matchPatternsForHost(hostname) });
+        } catch (_) {
+            continue;
+        }
+        for (const tab of tabs) {
+            const tabId = normalizeTabId(tab.id);
+            if (tabId === null) continue;
+            try {
+                await ensureRuntime(tabId);
+            } catch (_) {}
+        }
+    }
+}
+
 async function updateIcon(tabId, hostname, settings = null) {
     const id = normalizeTabId(tabId);
     if (id === null) return;
@@ -288,6 +308,7 @@ chrome.runtime.onInstalled.addListener(() => {
         if (!stored[STORAGE_KEY]) await writeSettings(Core.DEFAULT_SETTINGS);
         await createContextMenus();
         await syncRegistrations();
+        await refreshOpenEnabledTabs();
         await chrome.action.setIcon({ path: getIconPaths(false) });
     })().catch(error => console.error('RTL Fixancer installation failed:', error));
 });
