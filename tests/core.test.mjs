@@ -77,3 +77,10 @@ test('generates stable, host-specific registration IDs', () => {
     assert.notEqual(first, Core.registrationId('example.org'));
     assert.match(first, /^rtl-fixancer-[a-z0-9]+$/);
 });
+
+test('avoids the known collision from the legacy 32-bit registration hash', () => {
+    assert.notEqual(
+        Core.registrationId('wqgutzzy.com'),
+        Core.registrationId('jcuwm7gy.com')
+    );
+});
