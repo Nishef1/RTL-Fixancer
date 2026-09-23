@@ -23,7 +23,7 @@ Version 4.0 replaces the legacy all-site runtime with a permission-first archite
 - Vazir, Shabnam, or the website's own font.
 - Adjustable font size and detection sensitivity.
 - Per-site permissions and enabled-site management.
-- Optimized adapters for ChatGPT, Gemini, Google AI Studio, Perplexity, and DeepSeek.
+- Optimized adapters for X (Twitter), ChatGPT, Gemini, Google AI Studio, Perplexity, and DeepSeek.
 - Code blocks and host navigation controls remain LTR.
 - English and Persian popup UI.
 
