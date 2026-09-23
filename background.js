@@ -8,6 +8,7 @@ const REGISTRATION_PREFIX = 'rtl-fixancer-';
 const STORAGE_KEY = 'settings';
 let registrationSyncQueue = Promise.resolve();
 let settingsMutationQueue = Promise.resolve();
+let siteOperationQueue = Promise.resolve();
 
 function getIconPaths(enabled) {
     const state = enabled ? 'on' : 'off';
@@ -39,6 +40,11 @@ function mutateSettings(mutator) {
     };
     settingsMutationQueue = settingsMutationQueue.then(run, run);
     return settingsMutationQueue;
+}
+
+function enqueueSiteOperation(operation) {
+    siteOperationQueue = siteOperationQueue.then(operation, operation);
+    return siteOperationQueue;
 }
 
 async function hasPermissionForHost(hostname) {
@@ -129,16 +135,21 @@ async function cleanupOpenTabs(hostname, explicitTabId = null) {
     const tabIds = new Set();
     const directId = normalizeTabId(explicitTabId);
     if (directId !== null) tabIds.add(directId);
-    if (await hasPermissionForHost(host)) {
-        try {
-            const tabs = await chrome.tabs.query({ url: Core.matchPatternsForHost(host) });
-            for (const tab of tabs) {
-                const id = normalizeTabId(tab.id);
-                if (id !== null) tabIds.add(id);
-            }
-        } catch (_) {}
-    }
-    await Promise.all([...tabIds].map(tabId => sendToTab(tabId, { type: 'runtime:cleanup' })));
+
+    try {
+        const hasHostPermission = await hasPermissionForHost(host);
+        const tabs = await chrome.tabs.query(
+            hasHostPermission ? { url: Core.matchPatternsForHost(host) } : {}
+        );
+        for (const tab of tabs) {
+            const id = normalizeTabId(tab.id);
+            if (id !== null) tabIds.add(id);
+        }
+    } catch (_) {}
+
+    await Promise.all([...tabIds].map(tabId =>
+        sendToTab(tabId, { type: 'runtime:cleanup', hostname: host })
+    ));
 }
 
 async function injectRuntime(tabId) {
@@ -152,10 +163,16 @@ async function injectRuntime(tabId) {
 }
 
 async function ensureRuntime(tabId) {
+    const expectedVersion = Core.version;
     const ping = await sendToTab(tabId, { type: 'runtime:ping' });
-    if (ping?.ok) return ping;
+    if (ping?.ok && ping.version === expectedVersion) return ping;
+
     await injectRuntime(tabId);
-    return sendToTab(tabId, { type: 'runtime:ping' });
+    const refreshed = await sendToTab(tabId, { type: 'runtime:ping' });
+    if (!refreshed?.ok || refreshed.version !== expectedVersion) {
+        throw new Error('The current RTL Fixancer runtime could not be initialized.');
+    }
+    return refreshed;
 }
 
 async function updateIcon(tabId, hostname, settings = null) {
@@ -180,7 +197,7 @@ async function removeUnusedHostPermission(hostname, remainingSites) {
     }
 }
 
-async function setSiteEnabled({ hostname, enabled, tabId = null }) {
+async function setSiteEnabledNow({ hostname, enabled, tabId = null }) {
     const host = Core.normalizeHostname(hostname);
     if (!host) throw new Error('Invalid hostname.');
 
@@ -210,6 +227,10 @@ async function setSiteEnabled({ hostname, enabled, tabId = null }) {
 
     await updateIcon(tabId, host, settings);
     return { settings, enabled: Core.siteMatches(settings.enabledSites, host) };
+}
+
+function setSiteEnabled(options) {
+    return enqueueSiteOperation(() => setSiteEnabledNow(options));
 }
 
 async function updateSettings(patch) {
@@ -277,7 +298,7 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (!tab?.id || !Core.isSupportedUrl(tab.url || '')) return;
+    if (normalizeTabId(tab?.id) === null || !Core.isSupportedUrl(tab.url || '')) return;
     const hostname = new URL(tab.url).hostname;
 
     if (info.menuItemId === 'rtl-fixancer-toggle') {
@@ -353,15 +374,21 @@ chrome.permissions.onAdded.addListener(() => {
 });
 
 chrome.permissions.onRemoved.addListener(removed => {
-    void (async () => {
+    void enqueueSiteOperation(async () => {
         const removedOrigins = new Set(removed?.origins || []);
+        let removedHosts = [];
         await mutateSettings(settings => {
-            const enabledSites = settings.enabledSites.filter(hostname =>
-                !Core.matchPatternsForHost(hostname).some(origin => removedOrigins.has(origin))
+            removedHosts = settings.enabledSites.filter(hostname =>
+                Core.matchPatternsForHost(hostname).some(origin => removedOrigins.has(origin))
             );
-            if (enabledSites.length === settings.enabledSites.length) return null;
-            return { ...settings, enabledSites };
+            if (removedHosts.length === 0) return null;
+            const removedSet = new Set(removedHosts);
+            return {
+                ...settings,
+                enabledSites: settings.enabledSites.filter(hostname => !removedSet.has(hostname))
+            };
         });
+        await Promise.all(removedHosts.map(hostname => cleanupOpenTabs(hostname)));
         await syncRegistrations();
-    })().catch(error => console.error('RTL Fixancer permission sync failed:', error));
+    }).catch(error => console.error('RTL Fixancer permission sync failed:', error));
 });
