@@ -68,7 +68,8 @@
                 || host === 'twitter.com' || host.endsWith('.twitter.com'),
             content: '[data-testid="tweetText"]',
             messageRoot: '[data-testid="tweetText"]',
-            editor: '[data-testid="tweetTextarea_0"], [data-testid="dmComposerTextInput"]'
+            editor: '[data-testid="tweetTextarea_0"], [data-testid="dmComposerTextInput"]',
+            observedAttributes: ['data-testid']
         },
         {
             name: 'chatgpt',
