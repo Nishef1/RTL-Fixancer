@@ -69,10 +69,3 @@ docs/extension-audit.md Architecture and release verification notes
 
 See [LICENSE](LICENSE).
 
-## Donate
-
-If this project helps you, donations are welcome:
-
-```text
-0x5ba08cc1429bead9c07dc2030b881c6ed33c3a00
-```
