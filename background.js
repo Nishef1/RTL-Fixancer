@@ -9,6 +9,7 @@ const STORAGE_KEY = 'settings';
 let registrationSyncQueue = Promise.resolve();
 let settingsMutationQueue = Promise.resolve();
 let siteOperationQueue = Promise.resolve();
+let contextMenuSyncQueue = Promise.resolve();
 
 function getIconPaths(enabled) {
     const state = enabled ? 'on' : 'off';
@@ -291,15 +292,62 @@ async function printCurrentPage(tabId) {
     return { ok: true };
 }
 
-async function createContextMenus() {
-    await chrome.contextMenus.removeAll();
-    const entries = [
-        { id: 'rtl-fixancer-root', title: 'RTL Fixancer', contexts: ['all'] },
-        { id: 'rtl-fixancer-toggle', parentId: 'rtl-fixancer-root', title: 'Enable or disable on this site', contexts: ['all'] },
-        { id: 'rtl-fixancer-reapply', parentId: 'rtl-fixancer-root', title: 'Re-apply RTL fixes', contexts: ['all'] },
-        { id: 'rtl-fixancer-print', parentId: 'rtl-fixancer-root', title: 'Print / Save as PDF', contexts: ['all'] }
-    ];
-    for (const entry of entries) chrome.contextMenus.create(entry);
+const CONTEXT_MENU_ENTRIES = Object.freeze([
+    { id: 'rtl-fixancer-root', title: 'RTL Fixancer', contexts: ['all'] },
+    { id: 'rtl-fixancer-toggle', parentId: 'rtl-fixancer-root', title: 'Enable or disable on this site', contexts: ['all'] },
+    { id: 'rtl-fixancer-reapply', parentId: 'rtl-fixancer-root', title: 'Re-apply RTL fixes', contexts: ['all'] },
+    { id: 'rtl-fixancer-print', parentId: 'rtl-fixancer-root', title: 'Print / Save as PDF', contexts: ['all'] }
+]);
+
+function runContextMenuOperation(operation) {
+    return new Promise((resolve, reject) => {
+        operation(() => {
+            const message = chrome.runtime.lastError?.message;
+            if (message) reject(new Error(message));
+            else resolve();
+        });
+    });
+}
+
+function updateContextMenu(entry) {
+    const { id, ...properties } = entry;
+    return runContextMenuOperation(done => chrome.contextMenus.update(id, properties, done));
+}
+
+function createContextMenu(entry) {
+    return runContextMenuOperation(done => chrome.contextMenus.create(entry, done));
+}
+
+async function ensureContextMenu(entry) {
+    try {
+        await updateContextMenu(entry);
+        return;
+    } catch (_) {
+        // The item may not exist yet. Create it, then tolerate a concurrent
+        // creator by retrying update if Chrome reports a duplicate ID.
+    }
+
+    try {
+        await createContextMenu(entry);
+        return;
+    } catch (createError) {
+        try {
+            await updateContextMenu(entry);
+            return;
+        } catch (_) {
+            throw createError;
+        }
+    }
+}
+
+async function syncContextMenusNow() {
+    for (const entry of CONTEXT_MENU_ENTRIES) await ensureContextMenu(entry);
+}
+
+function createContextMenus() {
+    const run = () => syncContextMenusNow();
+    contextMenuSyncQueue = contextMenuSyncQueue.then(run, run);
+    return contextMenuSyncQueue;
 }
 
 chrome.runtime.onInstalled.addListener(() => {

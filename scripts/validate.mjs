@@ -37,6 +37,10 @@ assert(background.includes('chrome.permissions.onRemoved'), 'Permission changes 
 assert(background.includes("case 'runtime:state'"), 'Tab icon state must be driven without the broad tabs permission.');
 assert(background.includes('settingsMutationQueue'), 'Settings mutations must be serialized to prevent lost updates.');
 assert(background.includes('siteOperationQueue'), 'Site enable/disable operations must be serialized end to end.');
+assert(background.includes('contextMenuSyncQueue'), 'Context-menu synchronization must be serialized.');
+assert(background.includes('chrome.contextMenus.update(id, properties, done)'), 'Context menus must update existing IDs idempotently.');
+assert(background.includes('chrome.contextMenus.create(entry, done)'), 'Context-menu creation errors must be observed through callbacks.');
+assert(!background.includes('chrome.contextMenus.removeAll()'), 'Context menus must not rely on the Chrome 123+ removeAll Promise.');
 assert(background.includes('ping.version === expectedVersion'), 'Existing tabs must upgrade stale injected runtimes.');
 assert(background.includes('refreshOpenEnabledTabs'), 'Extension updates must refresh runtimes in already-open enabled tabs.');
 assert(background.includes("type: 'runtime:cleanup', hostname: host"), 'Permission cleanup must be host-scoped.');
