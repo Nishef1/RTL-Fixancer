@@ -8,7 +8,7 @@ const read = relative => readFile(path.join(root, relative), 'utf8');
 const manifest = JSON.parse(await read('manifest.json'));
 
 assert.equal(manifest.manifest_version, 3, 'Manifest V3 is required.');
-assert.equal(manifest.version, '4.1.4');
+assert.equal(manifest.version, '4.1.5');
 assert.equal(manifest.background?.service_worker, 'background.js');
 assert.equal(manifest.content_scripts, undefined, 'Static all-site content scripts are forbidden.');
 assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
@@ -80,6 +80,12 @@ assert(content.includes('[data-testid="tweetText"]'), 'X/Twitter tweet blocks mu
 assert(content.includes('this.appliedState = new WeakMap()'), 'DOM restoration must track extension-owned attribute values.');
 assert(content.includes('setOwnedAttribute'), 'DOM writes must record extension ownership before cleanup.');
 assert(content.includes('async applySettings(nextSettings)'), 'Storage changes should avoid unnecessary full runtime restarts.');
+assert(content.includes('const CHATGPT_EDITOR = ['), 'ChatGPT composer selectors must be centralized.');
+assert(content.includes("'#prompt-textarea'"), 'ChatGPT composer must keep the stable prompt-textarea anchor.');
+assert(content.includes("'[data-testid=\"prompt-textarea\"]'"), 'ChatGPT composer must support the prompt textarea test ID fallback.');
+assert(content.includes("'[data-composer-root] [contenteditable][role=\"textbox\"]'"), 'ChatGPT composer must support the current composer-root fallback.');
+assert(content.includes('editorHostFor(element)'), 'Nested composer events must resolve to their editable host.');
+assert(content.includes('#prompt-textarea[${INPUT_ATTR}="rtl"] > :is(p, div)'), 'ChatGPT ProseMirror child blocks must inherit forced RTL alignment.');
 assert(content.includes('existingRuntime.version === RUNTIME_VERSION'), 'Injected runtime replacement must be version aware.');
 assert(content.includes('version: this.version'), 'Runtime ping must report its implementation version.');
 assert(content.includes('requestedHost'), 'Cleanup messages must be scoped to the requested host.');

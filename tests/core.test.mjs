@@ -10,7 +10,7 @@ vm.runInContext(source, context, { filename: 'lib/core.js' });
 const Core = context.RTLFixancerCore;
 
 test('exposes the current core runtime version', () => {
-    assert.equal(Core.version, '4.1.4');
+    assert.equal(Core.version, '4.1.5');
 });
 
 test('normalizes hostnames and rejects invalid values', () => {

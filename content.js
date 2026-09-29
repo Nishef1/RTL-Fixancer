@@ -69,6 +69,14 @@
         '[class*="message-content" i]'
     ].join(',');
 
+    const CHATGPT_EDITOR = [
+        '#prompt-textarea',
+        '[data-testid="prompt-textarea"]',
+        'form[data-chatgpt-composer] [data-composer-markdown][contenteditable][role="textbox"]',
+        'form[data-type="unified-composer"] [contenteditable][role="textbox"]',
+        '[data-composer-root] [contenteditable][role="textbox"]'
+    ].join(',');
+
     const SITE_ADAPTERS = [
         {
             name: 'x',
@@ -84,7 +92,7 @@
             test: host => host === 'chatgpt.com' || host === 'chat.openai.com',
             content: CHATGPT_CONTENT,
             messageRoot: CHATGPT_CONTENT,
-            editor: '#prompt-textarea, [data-testid*="composer" i] [contenteditable="true"]',
+            editor: CHATGPT_EDITOR,
             observedAttributes: ['data-message-author-role', 'data-testid']
         },
         {
@@ -255,6 +263,12 @@
                     unicode-bidi: isolate !important;
                     ${fontRule}
                     ${sizeRule}
+                }
+                #prompt-textarea[${INPUT_ATTR}="rtl"] > :is(p, div),
+                [data-testid="prompt-textarea"][${INPUT_ATTR}="rtl"] > :is(p, div) {
+                    direction: rtl !important;
+                    text-align: right !important;
+                    unicode-bidi: isolate !important;
                 }
                 [${LTR_ATTR}="true"] {
                     direction: ltr !important;
@@ -529,13 +543,24 @@
             }
         }
 
+        editorHostFor(element) {
+            if (!element) return null;
+            const candidate = element.matches?.(EDITABLE_SELECTOR)
+                ? element
+                : element.closest?.(EDITABLE_SELECTOR);
+            if (!candidate || candidate.closest(CODE_ANCESTOR_SELECTOR)) return null;
+
+            if (!this.adapter?.editor) return candidate;
+            if (candidate.matches?.(this.adapter.editor)) return candidate;
+
+            const adapterHost = element.closest?.(this.adapter.editor);
+            if (adapterHost?.matches?.(EDITABLE_SELECTOR)) return adapterHost;
+            if (!candidate.closest?.(this.adapter.content)) return null;
+            return candidate;
+        }
+
         isSupportedEditor(element) {
-            if (!element?.matches?.(EDITABLE_SELECTOR)) return false;
-            if (element.closest(CODE_ANCESTOR_SELECTOR)) return false;
-            if (this.adapter?.editor && !element.matches(this.adapter.editor) && !element.closest(this.adapter.editor)) {
-                if (!element.closest(this.adapter.content)) return false;
-            }
-            return true;
+            return Boolean(this.editorHostFor(element));
         }
 
         editorText(element) {
@@ -544,24 +569,26 @@
         }
 
         processEditor(element) {
-            if (!this.active || !this.isSupportedEditor(element)) return;
+            if (!this.active) return;
+            const editor = this.editorHostFor(element);
+            if (!editor) return;
             try {
-                const result = Core.classifyText(this.editorText(element), this.settings.detectionMode);
+                const result = Core.classifyText(this.editorText(editor), this.settings.detectionMode);
                 if (result.direction !== 'rtl') {
-                    this.restoreElement(element);
+                    this.restoreElement(editor);
                     return;
                 }
-                this.setOwnedAttribute(element, INPUT_ATTR, 'rtl');
-                this.setOwnedAttribute(element, LANGUAGE_ATTR, result.language || 'ar');
-                this.setOwnedAttribute(element, 'dir', 'rtl');
+                this.setOwnedAttribute(editor, INPUT_ATTR, 'rtl');
+                this.setOwnedAttribute(editor, LANGUAGE_ATTR, result.language || 'ar');
+                this.setOwnedAttribute(editor, 'dir', 'rtl');
             } catch (_) {
                 this.stats.errors += 1;
             }
         }
 
         onInput(event) {
-            const target = event.target;
-            if (target?.matches?.(EDITABLE_SELECTOR)) this.processEditor(target);
+            const editor = this.editorHostFor(event.target);
+            if (editor) this.processEditor(editor);
         }
 
         captureElement(element) {
