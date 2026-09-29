@@ -192,6 +192,9 @@ async function refreshOpenEnabledTabs(settings = null) {
             try {
                 await ensureRuntime(tabId);
             } catch (_) {}
+            try {
+                await updateIcon(tabId, hostname, currentSettings);
+            } catch (_) {}
         }
     }
 }
@@ -362,8 +365,10 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
-    void Promise.all([createContextMenus(), syncRegistrations()])
-        .catch(error => console.error('RTL Fixancer startup failed:', error));
+    void (async () => {
+        await Promise.all([createContextMenus(), syncRegistrations()]);
+        await refreshOpenEnabledTabs();
+    })().catch(error => console.error('RTL Fixancer startup failed:', error));
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
@@ -412,8 +417,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 return { ok: true, settings: await readSettings() };
             case 'settings:update':
                 return { ok: true, settings: await updateSettings(message.patch) };
-            case 'site:status':
-                return { ok: true, ...(await getSiteStatus(message.hostname)) };
+            case 'site:status': {
+                const status = await getSiteStatus(message.hostname);
+                await updateIcon(message.tabId, message.hostname, status.settings);
+                return { ok: true, ...status };
+            }
             case 'site:set':
                 return { ok: true, ...(await setSiteEnabled(message)) };
             case 'runtime:reapply':

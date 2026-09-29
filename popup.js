@@ -285,7 +285,11 @@
         state.settings = Core.normalizeSettings(settingsResponse.settings);
 
         if (state.supported) {
-            state.status = await send({ type: 'site:status', hostname: state.hostname });
+            state.status = await send({
+                type: 'site:status',
+                hostname: state.hostname,
+                tabId: state.tab?.id ?? null
+            });
             state.settings = Core.normalizeSettings(state.status.settings);
         } else {
             state.status = { enabled: false, permissionGranted: false };

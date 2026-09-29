@@ -43,6 +43,9 @@ assert(background.includes('chrome.contextMenus.create(entry, done)'), 'Context-
 assert(!background.includes('chrome.contextMenus.removeAll()'), 'Context menus must not rely on the Chrome 123+ removeAll Promise.');
 assert(background.includes('ping.version === expectedVersion'), 'Existing tabs must upgrade stale injected runtimes.');
 assert(background.includes('refreshOpenEnabledTabs'), 'Extension updates must refresh runtimes in already-open enabled tabs.');
+assert(background.includes('await updateIcon(tabId, hostname, currentSettings)'), 'Open enabled tabs must restore their active toolbar icon.');
+assert(background.includes('await refreshOpenEnabledTabs();'), 'Startup and update flows must restore open-tab runtime and icon state.');
+assert(background.includes('await updateIcon(message.tabId, message.hostname, status.settings)'), 'Reading current-site status must self-heal the toolbar icon.');
 assert(background.includes("type: 'runtime:cleanup', hostname: host"), 'Permission cleanup must be host-scoped.');
 assert(background.includes('chrome.tabs.onUpdated'), 'Per-tab icon state must reset when navigation begins.');
 assert(!background.includes('syncRegistrations(Core.normalizeSettings'), 'Registration sync must read the latest stored settings.');
@@ -92,5 +95,6 @@ assert(popupCss.includes('RTLFixancerShabnamUI'), 'The bundled Persian UI font m
 assert(popupCss.includes('grid-template-columns: repeat(3, minmax(0, 1fr))'), 'Settings must remain in a compact three-column layout.');
 assert(!popupJs.includes('innerHTML'), 'Popup DOM must not be assembled with innerHTML.');
 assert(popupJs.includes('createTrashIcon'), 'Dynamic site actions must use the shared SVG icon builder.');
+assert(popupJs.includes("type: 'site:status'") && popupJs.includes('tabId: state.tab?.id ?? null'), 'Popup status refresh must identify the current tab so its icon can be synchronized.');
 
 console.log('Validation passed: permissions, X/Twitter blocks, reversible DOM ownership, serialized settings, live chat streaming, RTL lists, popup design, and source safety checks are valid.');
