@@ -42,6 +42,13 @@
         'div:has(> span[style*="direction:rtl"])',
         'div:has(> span[dir="rtl"])'
     ].join(',');
+    // Native Grok paragraphs can be standalone styled spans, without a
+    // qualifying div/markdown ancestor. Treat only these text roots as anchors.
+    const GROK_TEXT_ROOT_SELECTOR = [
+        'span[style*="direction: rtl" i]',
+        'span[style*="direction:rtl" i]',
+        'span[dir="rtl"]'
+    ].join(',');
     const GROK_RESPONSE_SELECTOR = [
         '[data-testid="grokResponse"]',
         '[data-testid="grokResponseText"]',
@@ -350,8 +357,12 @@
 
         candidateSelector() {
             return this.isGrokRoute()
-                ? `${CANDIDATE_SELECTOR},${GROK_TEXT_BLOCK_SELECTOR}`
+                ? `${CANDIDATE_SELECTOR},${GROK_TEXT_BLOCK_SELECTOR},${GROK_TEXT_ROOT_SELECTOR}`
                 : CANDIDATE_SELECTOR;
+        }
+
+        isGrokTextRoot(element) {
+            return this.isGrokRoute() && Boolean(element?.matches?.(GROK_TEXT_ROOT_SELECTOR));
         }
 
         messageRootFor(element) {
@@ -360,7 +371,7 @@
                 ? element : element.closest?.(this.adapter.messageRoot);
             if (message) return message;
             return this.isGrokRoute()
-                ? element.closest?.(`${GROK_RESPONSE_SELECTOR},${GROK_TEXT_BLOCK_SELECTOR}`) || null
+                ? element.closest?.(`${GROK_RESPONSE_SELECTOR},${GROK_TEXT_BLOCK_SELECTOR},${GROK_TEXT_ROOT_SELECTOR}`) || null
                 : null;
         }
 
@@ -384,8 +395,9 @@
                 : element.closest?.(BLOCK_SELECTOR);
             if (block && block !== candidate) this.enqueue(block);
             if (this.isGrokRoute()) {
-                const grokBlock = element.matches?.(GROK_TEXT_BLOCK_SELECTOR)
-                    ? element : element.closest?.(GROK_TEXT_BLOCK_SELECTOR);
+                const grokSelector = `${GROK_TEXT_BLOCK_SELECTOR},${GROK_TEXT_ROOT_SELECTOR}`;
+                const grokBlock = element.matches?.(grokSelector)
+                    ? element : element.closest?.(grokSelector);
                 if (grokBlock) this.enqueue(grokBlock);
             }
             this.markMessageDirty(element);
@@ -492,7 +504,8 @@
                 // surrounding navigation, composer, toolbars, or other X pages.
                 return this.isGrokRoute()
                     && Boolean(element.closest('main, [role="main"]'))
-                    && Boolean(element.closest(`${GROK_RESPONSE_SELECTOR},${GROK_TEXT_BLOCK_SELECTOR}`));
+                    && (this.isGrokTextRoot(element)
+                        || Boolean(element.closest(`${GROK_RESPONSE_SELECTOR},${GROK_TEXT_BLOCK_SELECTOR},${GROK_TEXT_ROOT_SELECTOR}`)));
             }
             return Boolean(element.closest(this.adapter.content));
         }
@@ -537,7 +550,7 @@
         rtlBlockAncestor(element) {
             const ancestor = element.parentElement?.closest?.(`[${MARK_ATTR}="rtl"]`);
             return ancestor?.matches?.(this.isGrokRoute()
-                ? `${BLOCK_SELECTOR},${GROK_TEXT_BLOCK_SELECTOR}`
+                ? `${BLOCK_SELECTOR},${GROK_TEXT_BLOCK_SELECTOR},${GROK_TEXT_ROOT_SELECTOR}`
                 : BLOCK_SELECTOR) ? ancestor : null;
         }
 
@@ -555,7 +568,9 @@
                 this.signatures.set(element, signature);
 
                 const rtlAncestor = this.rtlBlockAncestor(element);
-                if (this.isInlineElement(element) && rtlAncestor) {
+                // A Grok paragraph's own RTL span must retain its marker,
+                // even when a surrounding response/list is already marked.
+                if (this.isInlineElement(element) && rtlAncestor && !this.isGrokTextRoot(element)) {
                     if (result.direction === 'ltr' && result.rtlCount === 0 && result.ltrCount > 0 && text.length <= 160) {
                         this.markLtrInline(element);
                     } else {

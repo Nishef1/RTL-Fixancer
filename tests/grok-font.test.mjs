@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const coreSource = await readFile(new URL('../lib/core.js', import.meta.url), 'utf8');
 const contentSource = await readFile(new URL('../content.js', import.meta.url), 'utf8');
 
-async function grokStyles(selectedFont) {
+async function grokFixture(selectedFont, pathname = '/i/grok') {
     const inserted = [];
     const documentElement = {
         appendChild(node) { inserted.push(node); node.isConnected = true; },
@@ -34,7 +34,7 @@ async function grokStyles(selectedFont) {
     class MutationObserver { observe() {} disconnect() {} }
     const Node = { ELEMENT_NODE: 1, TEXT_NODE: 3 };
     const context = vm.createContext({ URL, Node, document, chrome, MutationObserver,
-        location: { hostname: 'x.com', pathname: '/i/grok' } });
+        location: { hostname: 'x.com', pathname } });
     context.globalThis = context;
     vm.runInContext(coreSource, context);
     vm.runInContext(contentSource, context);
@@ -42,7 +42,11 @@ async function grokStyles(selectedFont) {
         await new Promise(resolve => setImmediate(resolve));
     }
     assert.equal(inserted.length, 1, 'Grok runtime must insert its stylesheet');
-    return inserted[0].textContent;
+    return { css: inserted[0].textContent, runtime: context.__RTL_FIXANCER_RUNTIME_V4__ };
+}
+
+async function grokStyles(selectedFont) {
+    return (await grokFixture(selectedFont)).css;
 }
 
 test('Grok applies selected font to nested text without losing heading weights', async () => {
@@ -60,4 +64,25 @@ test('Grok respects the native font selection', async () => {
     assert.doesNotMatch(css, /font-family: 'RTLFixancerVazir' !important/);
     assert.doesNotMatch(css, /font-family: 'RTLFixancerShabnam' !important/);
     assert.doesNotMatch(css, /font-family: revert !important;/);
+});
+
+test('standalone native Grok RTL spans are processed without a markdown ancestor', async () => {
+    const { runtime } = await grokFixture('vazir');
+    const standalone = {
+        matches(selector) {
+            return selector.includes('span[style*="direction: rtl" i]');
+        },
+        closest(selector) {
+            return selector === 'main, [role="main"]' ? {} : null;
+        }
+    };
+    assert.equal(runtime.isGrokTextRoot(standalone), true);
+    assert.equal(runtime.isInContentArea(standalone), true);
+    assert.match(runtime.candidateSelector(), /span\\[style\\*="direction: rtl" i\\]/);
+
+    // The same span outside main, or on non-Grok X pages, is untouched.
+    const outsideMain = { ...standalone, closest() { return null; } };
+    assert.equal(runtime.isInContentArea(outsideMain), false);
+    const ordinaryX = await grokFixture('vazir', '/home');
+    assert.equal(ordinaryX.runtime.isGrokTextRoot(standalone), false);
 });

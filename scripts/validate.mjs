@@ -8,7 +8,7 @@ const read = relative => readFile(path.join(root, relative), 'utf8');
 const manifest = JSON.parse(await read('manifest.json'));
 
 assert.equal(manifest.manifest_version, 3, 'Manifest V3 is required.');
-assert.equal(manifest.version, '4.1.7');
+assert.equal(manifest.version, '4.1.8');
 assert.equal(manifest.background?.service_worker, 'background.js');
 assert.equal(manifest.content_scripts, undefined, 'Static all-site content scripts are forbidden.');
 assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
@@ -81,6 +81,8 @@ assert(content.includes('this.dirtyRoots.clear()'), 'Message-root work must be c
 assert(content.includes("name: 'x'"), 'X/Twitter requires a dedicated content boundary.');
 assert(content.includes('[data-testid="tweetText"]'), 'X/Twitter tweet blocks must be processed as block candidates.');
 assert(content.includes('GROK_TEXT_BLOCK_SELECTOR'), 'X Grok inline-span responses need their own block candidates.');
+assert(content.includes('GROK_TEXT_ROOT_SELECTOR'), 'Standalone Grok RTL paragraph spans must be eligible without a markdown wrapper.');
+assert(content.includes('!this.isGrokTextRoot(element)'), 'Native RTL paragraph roots must not be discarded as nested inline nodes.');
 assert(content.includes('isGrokRoute()'), 'Grok-specific DOM handling must be route-scoped.');
 assert(content.includes('nestedTextFontRule'), 'RTL text descendants need explicit font styling to override X/Grok fonts.');
 assert(content.includes("this.settings.selectedFont === 'default' ? ''"), 'Native-font setting must never force an extension font.');
