@@ -120,6 +120,17 @@ function normalizeTabId(value) {
     return Number.isInteger(value) && value >= 0 ? value : null;
 }
 
+async function tabStillOpen(tabId) {
+    const id = normalizeTabId(tabId);
+    if (id === null) return false;
+    try {
+        await chrome.tabs.get(id);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
 async function sendToTab(tabId, message) {
     const id = normalizeTabId(tabId);
     if (id === null) return null;
@@ -206,7 +217,12 @@ async function updateIcon(tabId, hostname, settings = null) {
     const currentSettings = settings || await readSettings();
     const enabled = Core.siteMatches(currentSettings.enabledSites, normalizedHost)
         && await hasPermissionForHost(normalizedHost);
-    await chrome.action.setIcon({ tabId: id, path: getIconPaths(enabled) });
+    try {
+        await chrome.action.setIcon({ tabId: id, path: getIconPaths(enabled) });
+    } catch (error) {
+        if (await tabStillOpen(id)) throw error;
+        // A tab can disappear while settings/permissions are being read.
+    }
 }
 
 async function refreshTabIcon(tabId) {
@@ -249,8 +265,13 @@ async function setSiteEnabledNow({ hostname, enabled, tabId = null }) {
     await syncRegistrations();
 
     if (enabled && tabId !== null) {
-        await ensureRuntime(tabId);
-        await sendToTab(tabId, { type: 'runtime:settings', settings });
+        try {
+            await ensureRuntime(tabId);
+            await sendToTab(tabId, { type: 'runtime:settings', settings });
+        } catch (error) {
+            // Closing the tab does not undo the saved site setting.
+            if (await tabStillOpen(tabId)) throw error;
+        }
     }
 
     // Site toggles change enabledSites only; never revoke browser host access.
@@ -457,6 +478,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 chrome.permissions.onAdded.addListener(() => {
     void syncRegistrations()
+        .then(() => refreshOpenEnabledTabs())
         .then(() => refreshOpenTabIcons())
         .catch(error => console.error('RTL Fixancer permission sync failed:', error));
 });

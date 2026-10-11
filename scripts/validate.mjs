@@ -8,7 +8,7 @@ const read = relative => readFile(path.join(root, relative), 'utf8');
 const manifest = JSON.parse(await read('manifest.json'));
 
 assert.equal(manifest.manifest_version, 3, 'Manifest V3 is required.');
-assert.equal(manifest.version, '4.1.10');
+assert.equal(manifest.version, '4.1.11');
 assert.equal(manifest.background?.service_worker, 'background.js');
 assert.equal(manifest.content_scripts, undefined, 'Static all-site content scripts are forbidden.');
 assert.deepEqual(manifest.host_permissions, ['http://*/*', 'https://*/*']);
@@ -65,6 +65,11 @@ assert(!core.includes('`*://${host}/*`'), 'Wildcard-scheme permission requests a
 
 const content = await read('content.js');
 assert(content.includes('MutationObserver'), 'The content runtime must be event driven.');
+assert(content.includes('ownedAttributesMatch'), 'Text signatures must not conceal host direction rewrites.');
+assert(content.includes('this.observesGrok ?'), 'Grok alone must observe style and dir mutations.');
+assert(content.includes('this.isInContentArea(element)'), 'SPA transitions must restore out-of-scope formatting.');
+assert(background.includes('tabStillOpen'), 'Closed tabs must not fail persisted site activation.');
+assert(background.includes('.then(() => refreshOpenEnabledTabs())'), 'Restored permission must refresh already open enabled tabs.');
 assert(content.includes("'class', 'role', 'aria-hidden', 'contenteditable'"), 'Relevant host UI attribute changes must be observed.');
 assert(content.includes("observedAttributes: ['data-message-author-role', 'data-testid']"), 'ChatGPT runtime identity changes must be observed.');
 assert(!content.includes('setInterval('), 'The content runtime must not use polling intervals.');

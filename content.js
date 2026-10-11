@@ -154,6 +154,7 @@
             this.adapter = SITE_ADAPTERS.find(candidate => candidate.test(location.hostname)) || null;
             this.observer = null;
             this.styleElement = null;
+            this.observesGrok = false;
             this.queue = new Set();
             this.dirtyRoots = new Set();
             this.scheduled = false;
@@ -224,10 +225,16 @@
 
         attachListeners() {
             this.observer?.disconnect();
+            // Rebinding on an X/Grok SPA transition must not duplicate listeners.
+            document.removeEventListener('input', this.onInput, true);
+            document.removeEventListener('compositionend', this.onInput, true);
+            document.removeEventListener('focusin', this.onInput, true);
+            this.observesGrok = this.isGrokRoute();
             this.observer = new MutationObserver(this.onMutation);
             const attributeFilter = [
                 'class', 'role', 'aria-hidden', 'contenteditable',
-                ...(this.adapter?.observedAttributes || [])
+                ...(this.adapter?.observedAttributes || []),
+                ...(this.observesGrok ? ['style', 'dir'] : [])
             ];
             this.observer.observe(document.documentElement || document, {
                 subtree: true,
@@ -311,6 +318,10 @@
                     text-align: right !important;
                     unicode-bidi: isolate !important;
                     ${fontRule}
+                }
+                /* Prevent relative size multiplication on nested marked spans. */
+                [${MARK_ATTR}="rtl"]:not([${MARK_ATTR}="rtl"] [${MARK_ATTR}="rtl"]),
+                [${INPUT_ATTR}="rtl"]:not([${INPUT_ATTR}="rtl"] [${INPUT_ATTR}="rtl"]) {
                     ${sizeRule}
                 }
                 #prompt-textarea[${INPUT_ATTR}="rtl"] > :is(p, div),
@@ -370,7 +381,12 @@
         }
 
         isGrokTextRoot(element) {
-            return this.isGrokRoute() && Boolean(element?.matches?.(GROK_TEXT_ROOT_SELECTOR));
+            if (!this.isGrokRoute() || !element?.matches?.(GROK_TEXT_ROOT_SELECTOR)) return false;
+            // Our own dir attribute must not turn every nested span into a new
+            // native Grok text root.
+            if (element.matches('span[style*="direction: rtl" i], span[style*="direction:rtl" i]')) return true;
+            const originalDir = this.originalState.get(element)?.dir;
+            return !originalDir || (originalDir.present && originalDir.value === 'rtl');
         }
 
         messageRootFor(element) {
@@ -413,6 +429,16 @@
 
         onMutation(mutations) {
             if (!this.active) return;
+            if (this.adapter?.name === 'x' && this.observesGrok !== this.isGrokRoute()) {
+                for (const element of [...this.touchedElements]) {
+                    if (element.isConnected && !this.isInContentArea(element)) {
+                        this.restoreElement(element, { syncList: false });
+                    }
+                }
+                this.attachListeners();
+                this.scan(document);
+                this.scanEditors(document);
+            }
             for (const mutation of mutations) {
                 if (mutation.type === 'attributes') {
                     const element = mutation.target;
@@ -551,6 +577,17 @@
             return `${this.settings.detectionMode}|${result.direction}|${result.language || ''}|${text}`;
         }
 
+        ownedAttributesMatch(element) {
+            const applied = this.appliedState.get(element);
+            if (!applied) return true;
+            for (const [name, state] of applied) {
+                const present = element.hasAttribute(name);
+                if (present !== state.present) return false;
+                if (present && element.getAttribute(name) !== state.value) return false;
+            }
+            return true;
+        }
+
         isInlineElement(element) {
             return element.matches?.(INLINE_SELECTOR) || false;
         }
@@ -572,7 +609,7 @@
                 const text = this.getText(element);
                 const result = Core.classifyText(text, this.settings.detectionMode);
                 const signature = this.signatureFor(text, result);
-                if (this.signatures.get(element) === signature) return;
+                if (this.signatures.get(element) === signature && this.ownedAttributesMatch(element)) return;
                 this.signatures.set(element, signature);
 
                 const rtlAncestor = this.rtlBlockAncestor(element);
@@ -704,6 +741,15 @@
 
         setOwnedAttribute(element, name, value) {
             this.captureElement(element);
+            const previous = this.appliedState.get(element)?.get(name);
+            const stillOwned = previous && element.hasAttribute(name) === previous.present
+                && (!previous.present || element.getAttribute(name) === previous.value);
+            if (previous && !stillOwned) {
+                // Preserve a new value written by the site while RTL was on.
+                this.originalState.get(element)[name] = element.hasAttribute(name)
+                    ? { present: true, value: element.getAttribute(name) }
+                    : { present: false, value: null };
+            }
             const normalized = String(value);
             this.appliedAttributes(element).set(name, { present: true, value: normalized });
             element.setAttribute(name, normalized);
