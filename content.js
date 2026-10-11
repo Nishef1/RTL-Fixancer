@@ -35,6 +35,20 @@
         'small', 'del', 'ins', 'sub', 'sup', 'time', 'abbr'
     ].join(',');
     const CANDIDATE_SELECTOR = `${BLOCK_SELECTOR},${INLINE_SELECTOR}`;
+    // X's Grok chat uses inline spans inside block-level divs rather than tweetText.
+    // Restrict these selectors to Grok routes and the main content region.
+    const GROK_TEXT_BLOCK_SELECTOR = [
+        'div:has(> span[style*="direction: rtl"])',
+        'div:has(> span[style*="direction:rtl"])',
+        'div:has(> span[dir="rtl"])'
+    ].join(',');
+    const GROK_RESPONSE_SELECTOR = [
+        '[data-testid="grokResponse"]',
+        '[data-testid="grokResponseText"]',
+        '[data-testid*="grokResponse" i]',
+        '[class*="markdown" i]',
+        '[class*="prose" i]'
+    ].join(',');
     const LIST_SELECTOR = 'ol, ul, [role="list"]';
     const EDITABLE_SELECTOR = [
         'textarea',
@@ -308,10 +322,25 @@
             this.styleElement = style;
         }
 
+        isGrokRoute() {
+            return this.adapter?.name === 'x'
+                && /^\/(?:i\/)?grok(?:\/|$)/i.test(location.pathname);
+        }
+
+        candidateSelector() {
+            return this.isGrokRoute()
+                ? `${CANDIDATE_SELECTOR},${GROK_TEXT_BLOCK_SELECTOR}`
+                : CANDIDATE_SELECTOR;
+        }
+
         messageRootFor(element) {
             if (!element || !this.adapter?.messageRoot) return null;
-            if (element.matches?.(this.adapter.messageRoot)) return element;
-            return element.closest?.(this.adapter.messageRoot) || null;
+            const message = element.matches?.(this.adapter.messageRoot)
+                ? element : element.closest?.(this.adapter.messageRoot);
+            if (message) return message;
+            return this.isGrokRoute()
+                ? element.closest?.(`${GROK_RESPONSE_SELECTOR},${GROK_TEXT_BLOCK_SELECTOR}`) || null
+                : null;
         }
 
         markMessageDirty(element) {
@@ -333,6 +362,11 @@
                 ? element
                 : element.closest?.(BLOCK_SELECTOR);
             if (block && block !== candidate) this.enqueue(block);
+            if (this.isGrokRoute()) {
+                const grokBlock = element.matches?.(GROK_TEXT_BLOCK_SELECTOR)
+                    ? element : element.closest?.(GROK_TEXT_BLOCK_SELECTOR);
+                if (grokBlock) this.enqueue(grokBlock);
+            }
             this.markMessageDirty(element);
         }
 
@@ -372,8 +406,9 @@
 
         scan(root) {
             if (!this.active || !root) return;
-            if (root.nodeType === Node.ELEMENT_NODE && root.matches?.(CANDIDATE_SELECTOR)) this.enqueue(root);
-            for (const element of root.querySelectorAll?.(CANDIDATE_SELECTOR) || []) this.enqueue(element);
+            const selector = this.candidateSelector();
+            if (root.nodeType === Node.ELEMENT_NODE && root.matches?.(selector)) this.enqueue(root);
+            for (const element of root.querySelectorAll?.(selector) || []) this.enqueue(element);
         }
 
         scanEditors(root) {
@@ -430,6 +465,14 @@
 
         isInContentArea(element) {
             if (!this.adapter) return true;
+            if (this.adapter.name === 'x') {
+                if (element.closest('[data-testid="tweetText"]')) return true;
+                // Grok is a different X view, not a tweet. Do not touch the
+                // surrounding navigation, composer, toolbars, or other X pages.
+                return this.isGrokRoute()
+                    && Boolean(element.closest('main, [role="main"]'))
+                    && Boolean(element.closest(`${GROK_RESPONSE_SELECTOR},${GROK_TEXT_BLOCK_SELECTOR}`));
+            }
             return Boolean(element.closest(this.adapter.content));
         }
 
@@ -472,7 +515,9 @@
 
         rtlBlockAncestor(element) {
             const ancestor = element.parentElement?.closest?.(`[${MARK_ATTR}="rtl"]`);
-            return ancestor?.matches?.(BLOCK_SELECTOR) ? ancestor : null;
+            return ancestor?.matches?.(this.isGrokRoute()
+                ? `${BLOCK_SELECTOR},${GROK_TEXT_BLOCK_SELECTOR}`
+                : BLOCK_SELECTOR) ? ancestor : null;
         }
 
         processElement(element) {

@@ -209,6 +209,26 @@ async function updateIcon(tabId, hostname, settings = null) {
     await chrome.action.setIcon({ tabId: id, path: getIconPaths(enabled) });
 }
 
+async function refreshTabIcon(tabId) {
+    const id = normalizeTabId(tabId);
+    if (id === null) return;
+    let tab;
+    try {
+        tab = await chrome.tabs.get(id);
+    } catch (_) {
+        return; // Closed during navigation.
+    }
+    // Use the current tab URL, never a stale content-script notification.
+    const url = tab.pendingUrl || tab.url || '';
+    const hostname = Core.isSupportedUrl(url) ? new URL(url).hostname : '';
+    await updateIcon(id, hostname);
+}
+
+async function refreshOpenTabIcons() {
+    const tabs = await chrome.tabs.query({});
+    await Promise.all(tabs.map(tab => refreshTabIcon(tab.id).catch(() => {})));
+}
+
 async function removeUnusedHostPermission(hostname, remainingSites) {
     const host = Core.normalizeHostname(hostname);
     if (!host) return false;
@@ -368,6 +388,7 @@ chrome.runtime.onStartup.addListener(() => {
     void (async () => {
         await Promise.all([createContextMenus(), syncRegistrations()]);
         await refreshOpenEnabledTabs();
+        await refreshOpenTabIcons();
     })().catch(error => console.error('RTL Fixancer startup failed:', error));
 });
 
@@ -398,9 +419,14 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-    if (changeInfo.status !== 'loading') return;
-    void chrome.action.setIcon({ tabId, path: getIconPaths(false) })
-        .catch(error => console.error('RTL Fixancer navigation icon reset failed:', error));
+    if (!changeInfo.url && changeInfo.status !== 'loading' && changeInfo.status !== 'complete') return;
+    void refreshTabIcon(tabId)
+        .catch(error => console.error('RTL Fixancer navigation icon refresh failed:', error));
+});
+
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+    void refreshTabIcon(tabId)
+        .catch(error => console.error('RTL Fixancer activated-tab icon refresh failed:', error));
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -409,7 +435,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             case 'runtime:state': {
                 const tabId = normalizeTabId(sender?.tab?.id);
                 if (tabId !== null) {
-                    await chrome.action.setIcon({ tabId, path: getIconPaths(Boolean(message.active)) });
+                    await refreshTabIcon(tabId);
                 }
                 return { ok: true };
             }
@@ -443,11 +469,14 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     const next = Core.normalizeSettings(changes[STORAGE_KEY].newValue);
     if (JSON.stringify(previous.enabledSites) === JSON.stringify(next.enabledSites)) return;
     void syncRegistrations()
-        .catch(error => console.error('RTL Fixancer registration sync failed:', error));
+        .then(() => refreshOpenTabIcons())
+        .catch(error => console.error('RTL Fixancer registration/icon sync failed:', error));
 });
 
 chrome.permissions.onAdded.addListener(() => {
-    void syncRegistrations().catch(error => console.error('RTL Fixancer permission sync failed:', error));
+    void syncRegistrations()
+        .then(() => refreshOpenTabIcons())
+        .catch(error => console.error('RTL Fixancer permission sync failed:', error));
 });
 
 chrome.permissions.onRemoved.addListener(removed => {
@@ -467,5 +496,6 @@ chrome.permissions.onRemoved.addListener(removed => {
         });
         await Promise.all(removedHosts.map(hostname => cleanupOpenTabs(hostname)));
         await syncRegistrations();
+        await refreshOpenTabIcons();
     }).catch(error => console.error('RTL Fixancer permission sync failed:', error));
 });

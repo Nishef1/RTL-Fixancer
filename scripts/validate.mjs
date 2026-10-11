@@ -8,7 +8,7 @@ const read = relative => readFile(path.join(root, relative), 'utf8');
 const manifest = JSON.parse(await read('manifest.json'));
 
 assert.equal(manifest.manifest_version, 3, 'Manifest V3 is required.');
-assert.equal(manifest.version, '4.1.5');
+assert.equal(manifest.version, '4.1.6');
 assert.equal(manifest.background?.service_worker, 'background.js');
 assert.equal(manifest.content_scripts, undefined, 'Static all-site content scripts are forbidden.');
 assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
@@ -47,7 +47,10 @@ assert(background.includes('await updateIcon(tabId, hostname, currentSettings)')
 assert(background.includes('await refreshOpenEnabledTabs();'), 'Startup and update flows must restore open-tab runtime and icon state.');
 assert(background.includes('await updateIcon(message.tabId, message.hostname, status.settings)'), 'Reading current-site status must self-heal the toolbar icon.');
 assert(background.includes("type: 'runtime:cleanup', hostname: host"), 'Permission cleanup must be host-scoped.');
-assert(background.includes('chrome.tabs.onUpdated'), 'Per-tab icon state must reset when navigation begins.');
+assert(background.includes('chrome.tabs.onUpdated'), 'Per-tab icon state must refresh during navigation.');
+assert(background.includes('chrome.tabs.onActivated'), 'Switching tabs must recheck the persisted icon state.');
+assert(!background.includes("if (changeInfo.status !== 'loading') return;"), 'Navigation must not blindly reset enabled icons.');
+assert(background.includes('await refreshTabIcon(tabId)'), 'Runtime messages must not overwrite stored enabled state with stale active flags.');
 assert(!background.includes('syncRegistrations(Core.normalizeSettings'), 'Registration sync must read the latest stored settings.');
 
 const core = await read('lib/core.js');
@@ -77,6 +80,9 @@ assert(content.includes('this.dirtyRoots = new Set()'), 'Message-root reprocessi
 assert(content.includes('this.dirtyRoots.clear()'), 'Message-root work must be cancelled during cleanup.');
 assert(content.includes("name: 'x'"), 'X/Twitter requires a dedicated content boundary.');
 assert(content.includes('[data-testid="tweetText"]'), 'X/Twitter tweet blocks must be processed as block candidates.');
+assert(content.includes('GROK_TEXT_BLOCK_SELECTOR'), 'X Grok inline-span responses need their own block candidates.');
+assert(content.includes('isGrokRoute()'), 'Grok-specific DOM handling must be route-scoped.');
+assert(content.includes("element.closest('main, [role=\"main\"]')"), 'Grok formatting must stay in the main content region.');
 assert(content.includes('this.appliedState = new WeakMap()'), 'DOM restoration must track extension-owned attribute values.');
 assert(content.includes('setOwnedAttribute'), 'DOM writes must record extension ownership before cleanup.');
 assert(content.includes('async applySettings(nextSettings)'), 'Storage changes should avoid unnecessary full runtime restarts.');
