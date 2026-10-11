@@ -78,7 +78,7 @@ test('standalone native Grok RTL spans are processed without a markdown ancestor
     };
     assert.equal(runtime.isGrokTextRoot(standalone), true);
     assert.equal(runtime.isInContentArea(standalone), true);
-    assert.match(runtime.candidateSelector(), /span\\[style\\*="direction: rtl" i\\]/);
+    assert.ok(runtime.candidateSelector().includes('span[style*="direction: rtl" i]'));
 
     // The same span outside main, or on non-Grok X pages, is untouched.
     const outsideMain = { ...standalone, closest() { return null; } };
