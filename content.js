@@ -261,15 +261,18 @@
             // Override only text descendants, preserving heading size/weight,
             // explicit LTR segments, code fonts, and the site's native default.
             const inlineTextSelector = 'span, a, strong, b, em, i, u, small, mark, cite, q, del, ins, sub, sup';
+            const protectedFontSelectors = [
+                'pre', 'code', 'kbd', 'samp',
+                '[class*="codeblock" i]', '[class*="code-block" i]',
+                '[dir="ltr"]', `[${LTR_ATTR}="true"]`, '[data-rtl-fixancer-ignore]'
+            ];
+            const excludedFontSelectors = protectedFontSelectors
+                .flatMap(selector => [selector, `${selector} *`]).join(', ');
+            const nestedTextSelector = `:is(${inlineTextSelector}):not(${excludedFontSelectors})`;
             const nestedTextFontRule = this.settings.selectedFont === 'default' ? '' : `
-                [${MARK_ATTR}="rtl"] :is(${inlineTextSelector}),
-                [${LIST_ATTR}="rtl"] > li :is(${inlineTextSelector}) {
+                [${MARK_ATTR}="rtl"] ${nestedTextSelector},
+                [${LIST_ATTR}="rtl"] > li ${nestedTextSelector} {
                     font-family: ${fontStack} !important;
-                }
-                [${MARK_ATTR}="rtl"] :is(pre, code, kbd, samp, [class*="codeblock" i], [class*="code-block" i]) :is(${inlineTextSelector}),
-                [${MARK_ATTR}="rtl"] :is([dir="ltr"], [${LTR_ATTR}="true"], [data-rtl-fixancer-ignore]) :is(${inlineTextSelector}),
-                [${LIST_ATTR}="rtl"] > li :is(pre, code, kbd, samp, [class*="codeblock" i], [class*="code-block" i], [dir="ltr"], [${LTR_ATTR}="true"], [data-rtl-fixancer-ignore]) :is(${inlineTextSelector}) {
-                    font-family: revert !important;
                 }
             `;
 

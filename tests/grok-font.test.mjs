@@ -17,7 +17,8 @@ async function grokStyles(selectedFont) {
         documentElement,
         createElement() { return { id: '', textContent: '', remove() {} }; },
         querySelectorAll() { return []; },
-        addEventListener() {}
+        addEventListener() {},
+        removeEventListener() {}
     };
     const chrome = {
         runtime: {
@@ -31,7 +32,7 @@ async function grokStyles(selectedFont) {
         }
     };
     class MutationObserver { observe() {} disconnect() {} }
-    const context = vm.createContext({ document, chrome, MutationObserver,
+    const context = vm.createContext({ URL, document, chrome, MutationObserver,
         location: { hostname: 'x.com', pathname: '/i/grok' } });
     context.globalThis = context;
     vm.runInContext(coreSource, context);
@@ -46,8 +47,10 @@ async function grokStyles(selectedFont) {
 test('Grok applies selected font to nested text without losing heading weights', async () => {
     const css = await grokStyles('vazir');
     assert.match(css, /\[data-rtl-fixancer="rtl"\] :is\(span, a, strong, b, em/);
+    assert.match(css, /:not\(pre, pre \*, code, code \*/);
+    assert.match(css, /\[dir="ltr"\], \[dir="ltr"\] \*/);
     assert.match(css, /font-family: 'RTLFixancerVazir'/);
-    assert.match(css, /font-family: revert !important;/);
+    assert.doesNotMatch(css, /font-family: revert !important;/);
     assert.doesNotMatch(css, /font-weight: inherit !important/);
 });
 

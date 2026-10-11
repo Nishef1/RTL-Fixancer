@@ -84,7 +84,7 @@ assert(content.includes('GROK_TEXT_BLOCK_SELECTOR'), 'X Grok inline-span respons
 assert(content.includes('isGrokRoute()'), 'Grok-specific DOM handling must be route-scoped.');
 assert(content.includes('nestedTextFontRule'), 'RTL text descendants need explicit font styling to override X/Grok fonts.');
 assert(content.includes("this.settings.selectedFont === 'default' ? ''"), 'Native-font setting must never force an extension font.');
-assert(content.includes('font-family: revert !important;'), 'Code and explicit LTR segments must retain their original fonts.');
+assert(content.includes('excludedFontSelectors'), 'Code and explicit LTR segments must be excluded from font overrides.');
 assert(content.includes("element.closest('main, [role=\"main\"]')"), 'Grok formatting must stay in the main content region.');
 assert(content.includes('this.appliedState = new WeakMap()'), 'DOM restoration must track extension-owned attribute values.');
 assert(content.includes('setOwnedAttribute'), 'DOM writes must record extension ownership before cleanup.');
