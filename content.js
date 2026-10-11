@@ -273,8 +273,16 @@
                 '[class*="codeblock" i]', '[class*="code-block" i]',
                 '[dir="ltr"]', `[${LTR_ATTR}="true"]`, '[data-rtl-fixancer-ignore]'
             ];
+            // A Grok response can live under X's page-wide [dir="ltr"].
+            // Excluding every descendant of ANY LTR ancestor accidentally
+            // disables our font on those explicitly marked RTL paragraphs.
+            // Only exclude a protected region when it is INSIDE our RTL block.
             const excludedFontSelectors = protectedFontSelectors
-                .flatMap(selector => [selector, `${selector} *`]).join(', ');
+                .flatMap(selector => [
+                    selector,
+                    `[${MARK_ATTR}="rtl"] ${selector} *`,
+                    `[${LIST_ATTR}="rtl"] > li ${selector} *`
+                ]).join(', ');
             const nestedTextSelector = `:is(${inlineTextSelector}):not(${excludedFontSelectors})`;
             const nestedTextFontRule = this.settings.selectedFont === 'default' ? '' : `
                 [${MARK_ATTR}="rtl"] ${nestedTextSelector},

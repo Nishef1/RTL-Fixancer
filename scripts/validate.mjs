@@ -8,7 +8,7 @@ const read = relative => readFile(path.join(root, relative), 'utf8');
 const manifest = JSON.parse(await read('manifest.json'));
 
 assert.equal(manifest.manifest_version, 3, 'Manifest V3 is required.');
-assert.equal(manifest.version, '4.1.9');
+assert.equal(manifest.version, '4.1.10');
 assert.equal(manifest.background?.service_worker, 'background.js');
 assert.equal(manifest.content_scripts, undefined, 'Static all-site content scripts are forbidden.');
 assert.deepEqual(manifest.host_permissions, ['http://*/*', 'https://*/*']);
@@ -92,6 +92,8 @@ assert(content.includes('isGrokRoute()'), 'Grok-specific DOM handling must be ro
 assert(content.includes('nestedTextFontRule'), 'RTL text descendants need explicit font styling to override X/Grok fonts.');
 assert(content.includes("this.settings.selectedFont === 'default' ? ''"), 'Native-font setting must never force an extension font.');
 assert(content.includes('excludedFontSelectors'), 'Code and explicit LTR segments must be excluded from font overrides.');
+assert(content.includes('`[${MARK_ATTR}="rtl"] ${selector} *`'), 'LTR exclusions must be scoped within a marked RTL block.');
+assert(!content.includes('flatMap(selector => [selector, `${selector} *`])'), 'An X page-wide LTR ancestor must not suppress RTL typography.');
 assert(content.includes("element.closest('main, [role=\"main\"]')"), 'Grok formatting must stay in the main content region.');
 assert(content.includes('this.appliedState = new WeakMap()'), 'DOM restoration must track extension-owned attribute values.');
 assert(content.includes('setOwnedAttribute'), 'DOM writes must record extension ownership before cleanup.');

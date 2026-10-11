@@ -52,8 +52,10 @@ async function grokStyles(selectedFont) {
 test('Grok applies selected font to nested text without losing heading weights', async () => {
     const css = await grokStyles('vazir');
     assert.match(css, /\[data-rtl-fixancer="rtl"\] :is\(span, a, strong, b, em/);
-    assert.match(css, /:not\(pre, pre \*, code, code \*/);
-    assert.match(css, /\[dir="ltr"\], \[dir="ltr"\] \*/);
+    // X's LTR page wrapper must not disable font styling in marked RTL text.
+    assert.match(css, /:not\(pre, \[data-rtl-fixancer="rtl"\] pre \*/);
+    assert.match(css, /\[dir="ltr"\], \[data-rtl-fixancer="rtl"\] \[dir="ltr"\] \*/);
+    assert.doesNotMatch(css, /:not\(pre, pre \*/);
     assert.match(css, /font-family: 'RTLFixancerVazir'/);
     assert.doesNotMatch(css, /font-family: revert !important;/);
     assert.doesNotMatch(css, /font-weight: inherit !important/);
@@ -85,4 +87,12 @@ test('standalone native Grok RTL spans are processed without a markdown ancestor
     assert.equal(runtime.isInContentArea(outsideMain), false);
     const ordinaryX = await grokFixture('vazir', '/home');
     assert.equal(ordinaryX.runtime.isGrokTextRoot(standalone), false);
+});
+
+test('Grok font CSS excludes local LTR regions, not page-wide LTR ancestors', async () => {
+    const css = await grokStyles('shabnam');
+    assert.ok(css.includes('[data-rtl-fixancer="rtl"] [dir="ltr"] *'));
+    assert.ok(css.includes('[data-rtl-fixancer-list="rtl"] > li [dir="ltr"] *'));
+    assert.ok(!css.includes(', [dir="ltr"] *,'));
+    assert.match(css, /font-family: 'RTLFixancerShabnam'/);
 });
