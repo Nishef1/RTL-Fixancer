@@ -32,7 +32,8 @@ async function grokStyles(selectedFont) {
         }
     };
     class MutationObserver { observe() {} disconnect() {} }
-    const context = vm.createContext({ URL, document, chrome, MutationObserver,
+    const Node = { ELEMENT_NODE: 1, TEXT_NODE: 3 };
+    const context = vm.createContext({ URL, Node, document, chrome, MutationObserver,
         location: { hostname: 'x.com', pathname: '/i/grok' } });
     context.globalThis = context;
     vm.runInContext(coreSource, context);
