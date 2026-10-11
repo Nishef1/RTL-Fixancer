@@ -256,6 +256,23 @@
                 ? ''
                 : `font-size: ${fontSize} !important;`;
 
+            // X/Grok supplies its own font on nested spans and emphasis nodes.
+            // Those declarations beat inherited font-family on an RTL parent.
+            // Override only text descendants, preserving heading size/weight,
+            // explicit LTR segments, code fonts, and the site's native default.
+            const inlineTextSelector = 'span, a, strong, b, em, i, u, small, mark, cite, q, del, ins, sub, sup';
+            const nestedTextFontRule = this.settings.selectedFont === 'default' ? '' : `
+                [${MARK_ATTR}="rtl"] :is(${inlineTextSelector}),
+                [${LIST_ATTR}="rtl"] > li :is(${inlineTextSelector}) {
+                    font-family: ${fontStack} !important;
+                }
+                [${MARK_ATTR}="rtl"] :is(pre, code, kbd, samp, [class*="codeblock" i], [class*="code-block" i]) :is(${inlineTextSelector}),
+                [${MARK_ATTR}="rtl"] :is([dir="ltr"], [${LTR_ATTR}="true"], [data-rtl-fixancer-ignore]) :is(${inlineTextSelector}),
+                [${LIST_ATTR}="rtl"] > li :is(pre, code, kbd, samp, [class*="codeblock" i], [class*="code-block" i], [dir="ltr"], [${LTR_ATTR}="true"], [data-rtl-fixancer-ignore]) :is(${inlineTextSelector}) {
+                    font-family: revert !important;
+                }
+            `;
+
             style.textContent = `
                 @font-face {
                     font-family: 'RTLFixancerVazir';
@@ -316,6 +333,7 @@
                 [${MARK_ATTR}="rtl"] :is(pre, code, kbd, samp, [class*="codeblock" i], [class*="code-block" i]) {
                     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
                 }
+                ${nestedTextFontRule}
             `;
 
             (document.head || document.documentElement).appendChild(style);
