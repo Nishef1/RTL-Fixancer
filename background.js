@@ -229,25 +229,13 @@ async function refreshOpenTabIcons() {
     await Promise.all(tabs.map(tab => refreshTabIcon(tab.id).catch(() => {})));
 }
 
-async function removeUnusedHostPermission(hostname, remainingSites) {
-    const host = Core.normalizeHostname(hostname);
-    if (!host) return false;
-    const stillCovered = remainingSites.some(site => Core.normalizeHostname(site) === host);
-    if (stillCovered) return false;
-    try {
-        return await chrome.permissions.remove({ origins: Core.matchPatternsForHost(host) });
-    } catch (_) {
-        return false;
-    }
-}
-
 async function setSiteEnabledNow({ hostname, enabled, tabId = null }) {
     const host = Core.normalizeHostname(hostname);
     if (!host) throw new Error('Invalid hostname.');
 
     if (enabled && !await hasPermissionForHost(host)) {
-        const error = new Error('Site permission has not been granted.');
-        error.code = 'HOST_PERMISSION_REQUIRED';
+        const error = new Error('Chrome has restricted site access. Change RTL Fixancer site access to "On all sites" in Chrome extension settings.');
+        error.code = 'HOST_ACCESS_RESTRICTED';
         throw error;
     }
     if (!enabled) await cleanupOpenTabs(host, tabId);
@@ -265,10 +253,7 @@ async function setSiteEnabledNow({ hostname, enabled, tabId = null }) {
         await sendToTab(tabId, { type: 'runtime:settings', settings });
     }
 
-    if (!enabled) {
-        await removeUnusedHostPermission(host, settings.enabledSites);
-    }
-
+    // Site toggles change enabledSites only; never revoke browser host access.
     await updateIcon(tabId, host, settings);
     return { settings, enabled: Core.siteMatches(settings.enabledSites, host) };
 }
@@ -379,8 +364,9 @@ chrome.runtime.onInstalled.addListener(() => {
         if (!stored[STORAGE_KEY]) await writeSettings(Core.DEFAULT_SETTINGS);
         await createContextMenus();
         await syncRegistrations();
-        await refreshOpenEnabledTabs();
         await chrome.action.setIcon({ path: getIconPaths(false) });
+        await refreshOpenEnabledTabs();
+        await refreshOpenTabIcons();
     })().catch(error => console.error('RTL Fixancer installation failed:', error));
 });
 
@@ -397,15 +383,11 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     const hostname = new URL(tab.url).hostname;
 
     if (info.menuItemId === 'rtl-fixancer-toggle') {
-        const origins = Core.matchPatternsForHost(hostname);
-        const previousPermission = chrome.permissions.contains({ origins });
-        const permissionRequest = chrome.permissions.request({ origins });
-        void Promise.all([previousPermission, permissionRequest]).then(async ([hadPermission, granted]) => {
-            if (!granted) return;
-            const status = await getSiteStatus(hostname);
-            const enable = hadPermission ? !status.enabled : true;
-            await setSiteEnabled({ hostname, enabled: enable, tabId: tab.id });
-        }).catch(error => console.error('RTL Fixancer context-menu toggle failed:', error));
+        void (async () => {
+            const settings = await readSettings();
+            const enabled = Core.siteMatches(settings.enabledSites, hostname);
+            await setSiteEnabled({ hostname, enabled: !enabled, tabId: tab.id });
+        })().catch(error => console.error('RTL Fixancer context-menu toggle failed:', error));
         return;
     }
 
@@ -479,22 +461,14 @@ chrome.permissions.onAdded.addListener(() => {
         .catch(error => console.error('RTL Fixancer permission sync failed:', error));
 });
 
-chrome.permissions.onRemoved.addListener(removed => {
+chrome.permissions.onRemoved.addListener(() => {
+    // Chrome may restrict a requested host independently of our enabledSites.
+    // Preserve preferences so restored browser access re-enables the site.
     void enqueueSiteOperation(async () => {
-        const removedOrigins = new Set(removed?.origins || []);
-        let removedHosts = [];
-        await mutateSettings(settings => {
-            removedHosts = settings.enabledSites.filter(hostname =>
-                Core.matchPatternsForHost(hostname).some(origin => removedOrigins.has(origin))
-            );
-            if (removedHosts.length === 0) return null;
-            const removedSet = new Set(removedHosts);
-            return {
-                ...settings,
-                enabledSites: settings.enabledSites.filter(hostname => !removedSet.has(hostname))
-            };
-        });
-        await Promise.all(removedHosts.map(hostname => cleanupOpenTabs(hostname)));
+        const settings = await readSettings();
+        for (const hostname of settings.enabledSites) {
+            if (!await hasPermissionForHost(hostname)) await cleanupOpenTabs(hostname);
+        }
         await syncRegistrations();
         await refreshOpenTabIcons();
     }).catch(error => console.error('RTL Fixancer permission sync failed:', error));

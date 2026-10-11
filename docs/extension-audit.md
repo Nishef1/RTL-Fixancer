@@ -1,4 +1,4 @@
-# RTL Fixancer 4.0 Architecture Audit
+# RTL Fixancer Architecture Audit (4.1.9 update)
 
 Date: 2026-09-23
 
@@ -6,8 +6,8 @@ Date: 2026-09-23
 
 - Manifest V3 service worker.
 - No static content scripts.
-- No required host permissions.
-- `optional_host_permissions` are requested only from a popup or context-menu user gesture.
+- Manifest-declared HTTP/HTTPS host permissions replace per-site runtime prompts.
+- Chrome may ask once on install/update; Chrome site restrictions are still respected.
 - Dynamic registrations exist only for enabled hostnames with granted permissions.
 - Content scripts execute in the isolated world and only in the top frame.
 - No remote code, telemetry, or content upload.
@@ -21,11 +21,12 @@ Before setting `dir` or extension data attributes, the runtime records whether e
 
 ## Permission lifecycle
 
-1. The user opens the popup on an HTTP/HTTPS page.
-2. Enabling the site calls `chrome.permissions.request()` with that exact hostname's match pattern.
-3. The service worker stores the hostname and registers `lib/core.js` plus `content.js` with `chrome.scripting.registerContentScripts()`.
+1. On installation/upgrade, Chrome may ask once for access to HTTP/HTTPS sites.
+2. The user enables a hostname in the popup or context menu, without a `chrome.permissions.request()` call.
+3. The service worker checks Chrome-granted host access, saves the hostname, and registers scripts **only for enabled hosts**.
 4. The current tab is injected immediately; future matching navigations use the persistent dynamic registration.
-5. Disabling sends an explicit cleanup message to every matching open tab, unregisters the content script, and removes the now-unused host permission.
+5. Disabling sends explicit cleanup messages and unregisters the script without revoking browser host permission.
+6. Chrome site-access restrictions trigger re-synchronization without erasing the saved enabled-site list.
 
 Unregistering alone is intentionally not treated as cleanup because already-injected scripts and styles remain in the page until explicitly reverted.
 
@@ -47,7 +48,7 @@ Unregistering alone is intentionally not treated as cleanup because already-inje
 
 - Run `npm run check` with Node.js 22+.
 - Load unpacked in Chrome 120+.
-- Test permission grant, denial, disable, and re-enable.
+- Test installation/upgrade permission consent, no per-site Allow on enable, Chrome site restrictions, disable and re-enable.
 - Confirm an unenabled site receives no content runtime.
 - Confirm exact DOM restoration without page reload.
 - Test Persian, Arabic, Hebrew, mixed text, inputs, code blocks, and lists.
@@ -70,7 +71,7 @@ Appearance-only setting changes update runtime styles without restoring and resc
 
 Injected page runtimes report their implementation version. Re-apply and enable operations only reuse a runtime when that version matches the current extension core; otherwise the current files are injected, the older runtime removes its listeners and restores its DOM changes, and the new runtime replaces it. This prevents already-open tabs from silently continuing to run code from an older extension update.
 
-Site enable/disable operations are serialized as whole operations, including permission removal and runtime injection. Permission revocation from Chrome settings removes the affected hostname from storage, sends a host-scoped cleanup message to existing page runtimes, and then resynchronizes dynamic registrations.
+Site enable/disable operations are serialized as whole operations, including runtime injection. Browser permission changes never erase saved enabled sites; restrictions trigger host-scoped cleanup attempts and registration sync, and restoring access reactivates saved sites.
 
 
 On extension install/update, already-open enabled tabs are refreshed automatically. The service worker queries only enabled hosts for which permission is still granted and performs the same version handshake, so a site-specific fix does not require a manual page refresh before it can take effect.

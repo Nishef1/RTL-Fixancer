@@ -8,10 +8,11 @@ const read = relative => readFile(path.join(root, relative), 'utf8');
 const manifest = JSON.parse(await read('manifest.json'));
 
 assert.equal(manifest.manifest_version, 3, 'Manifest V3 is required.');
-assert.equal(manifest.version, '4.1.8');
+assert.equal(manifest.version, '4.1.9');
 assert.equal(manifest.background?.service_worker, 'background.js');
 assert.equal(manifest.content_scripts, undefined, 'Static all-site content scripts are forbidden.');
-assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
+assert.deepEqual(manifest.host_permissions, ['http://*/*', 'https://*/*']);
+assert.equal(manifest.optional_host_permissions, undefined, 'No per-site permission prompts.');
 assert(!manifest.permissions.includes('tabs'), 'The broad tabs permission must not be requested.');
 assert(!manifest.permissions.includes('webNavigation'), 'webNavigation is not needed.');
 
@@ -33,10 +34,14 @@ const background = await read('background.js');
 assert(background.includes("runAt: 'document_idle'"), 'Dynamic scripts should run at document_idle.');
 assert(background.includes('registerContentScripts'), 'Dynamic content-script registration is required.');
 assert(background.includes('cleanupOpenTabs'), 'Disabling a site must clean already-open matching tabs.');
-assert(background.includes('chrome.permissions.onRemoved'), 'Permission changes must resynchronize dynamic registrations.');
+assert(background.includes('chrome.permissions.onRemoved'), 'Chrome site access changes must resynchronize registrations.');
+assert(!background.includes('chrome.permissions.request('), 'Background must not request site permissions.');
+assert(!background.includes('chrome.permissions.remove('), 'Disabling a site must not revoke host access.');
+assert(background.includes('hasPermissionForHost(host)'), 'Respect Chrome site-access restrictions.');
 assert(background.includes("case 'runtime:state'"), 'Tab icon state must be driven without the broad tabs permission.');
 assert(background.includes('settingsMutationQueue'), 'Settings mutations must be serialized to prevent lost updates.');
 assert(background.includes('siteOperationQueue'), 'Site enable/disable operations must be serialized end to end.');
+assert(!background.includes('enabledSites.filter(hostname => !removedSet.has(hostname))'), 'Chrome site-access changes must preserve user preferences.');
 assert(background.includes('contextMenuSyncQueue'), 'Context-menu synchronization must be serialized.');
 assert(background.includes('chrome.contextMenus.update(id, properties, done)'), 'Context menus must update existing IDs idempotently.');
 assert(background.includes('chrome.contextMenus.create(entry, done)'), 'Context-menu creation errors must be observed through callbacks.');
@@ -111,7 +116,10 @@ assert(!/[🌐⚙️📋🗑️]/u.test(popupHtml), 'Decorative emoji icons are 
 assert(popupCss.includes('RTLFixancerShabnamUI'), 'The bundled Persian UI font must be declared.');
 assert(popupCss.includes('grid-template-columns: repeat(3, minmax(0, 1fr))'), 'Settings must remain in a compact three-column layout.');
 assert(!popupJs.includes('innerHTML'), 'Popup DOM must not be assembled with innerHTML.');
+assert(!popupJs.includes('chrome.permissions.request('), 'Popup must not display per-site Allow dialogs.');
+assert(!popupJs.includes('requestCurrentSitePermission'), 'Remove per-site permission request workflow.');
+assert(!popupJs.includes('chrome.permissions.contains('), 'Only background should check granted host access.');
 assert(popupJs.includes('createTrashIcon'), 'Dynamic site actions must use the shared SVG icon builder.');
 assert(popupJs.includes("type: 'site:status'") && popupJs.includes('tabId: state.tab?.id ?? null'), 'Popup status refresh must identify the current tab so its icon can be synchronized.');
 
-console.log('Validation passed: permissions, X/Twitter blocks, reversible DOM ownership, serialized settings, live chat streaming, RTL lists, popup design, and source safety checks are valid.');
+console.log('Validation passed: one-time host access, per-site opt-in without Allow prompts, reversible RTL, Grok, popup, and source safety.');

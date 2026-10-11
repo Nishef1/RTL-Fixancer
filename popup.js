@@ -13,8 +13,8 @@
             loading: 'Loading…',
             restricted: 'Restricted page',
             enabledHint: 'Private, on-device RTL processing is active.',
-            disabledHint: 'Enable access for this site only.',
-            permissionHint: 'Chrome will ask once for this hostname.',
+            disabledHint: 'Turn on RTL formatting for this website.',
+            permissionHint: 'Chrome has limited site access. Choose “On all sites” in RTL Fixancer extension settings.',
             reapply: 'Re-apply',
             print: 'PDF',
             settings: 'Settings',
@@ -25,11 +25,10 @@
             empty: 'No sites enabled yet.',
             remove: 'Remove',
             footer: 'Changes are applied immediately.',
-            enabling: 'Requesting access…',
             enabled: 'Enabled on this site.',
             disabled: 'Disabled on this site.',
             updated: 'Settings updated.',
-            denied: 'Site access was not granted.',
+            denied: 'Chrome site access is restricted. Choose “On all sites” in the extension settings.',
             error: 'Something went wrong. Reload the extension and try again.',
             active: 'Active',
             inactive: 'Inactive',
@@ -49,8 +48,8 @@
             loading: 'در حال بارگذاری…',
             restricted: 'صفحه محدود است',
             enabledHint: 'پردازش راست‌به‌چپ به‌صورت محلی فعال است.',
-            disabledHint: 'دسترسی فقط برای همین سایت فعال می‌شود.',
-            permissionHint: 'کروم یک‌بار برای همین دامنه اجازه می‌خواهد.',
+            disabledHint: 'نمایش راست‌به‌چپ را برای این سایت فعال کن.',
+            permissionHint: 'دسترسی افزونه در کروم محدود شده است. در تنظیمات افزونه گزینهٔ «On all sites» را انتخاب کن.',
             reapply: 'اعمال مجدد',
             print: 'PDF',
             settings: 'تنظیمات',
@@ -61,11 +60,10 @@
             empty: 'هنوز سایتی فعال نشده است.',
             remove: 'حذف',
             footer: 'تغییرات بلافاصله اعمال می‌شوند.',
-            enabling: 'در حال درخواست دسترسی…',
             enabled: 'برای این سایت فعال شد.',
             disabled: 'برای این سایت غیرفعال شد.',
             updated: 'تنظیمات به‌روزرسانی شد.',
-            denied: 'اجازه دسترسی به سایت داده نشد.',
+            denied: 'دسترسی افزونه در کروم محدود است. در تنظیمات افزونه «On all sites» را انتخاب کن.',
             error: 'مشکلی رخ داد. افزونه را دوباره بارگذاری کن.',
             active: 'فعال',
             inactive: 'غیرفعال',
@@ -302,24 +300,14 @@
         setBusy(false);
     }
 
-    async function requestCurrentSitePermission() {
-        const origins = Core.matchPatternsForHost(state.hostname);
-        if (origins.length === 0) return false;
-        return chrome.permissions.request({ origins });
-    }
-
     async function toggleSite(enabled) {
         if (!state.supported || state.busy) return;
         setBusy(true);
         try {
-            if (enabled && !state.status.permissionGranted) {
-                showNotice(t('enabling'));
-                const granted = await requestCurrentSitePermission();
-                if (!granted) {
-                    elements.siteToggle.checked = false;
-                    showNotice(t('denied'), true);
-                    return;
-                }
+            if (enabled && !state.status?.permissionGranted) {
+                elements.siteToggle.checked = false;
+                showNotice(t('denied'), true);
+                return;
             }
 
             const response = await send({
@@ -333,16 +321,14 @@
             state.status = {
                 ...state.status,
                 enabled: response.enabled,
-                permissionGranted: enabled
-                    ? true
-                    : await chrome.permissions.contains({ origins: Core.matchPatternsForHost(state.hostname) })
+                permissionGranted: state.status.permissionGranted
             };
             showNotice(enabled ? t('enabled') : t('disabled'));
             renderSiteStatus();
             renderSites();
         } catch (error) {
             elements.siteToggle.checked = !enabled;
-            showNotice(error.message || t('error'), true);
+            showNotice(error.code === 'HOST_ACCESS_RESTRICTED' ? t('denied') : (error.message || t('error')), true);
         } finally {
             setBusy(false);
         }
@@ -358,9 +344,7 @@
                 state.status = {
                     ...state.status,
                     enabled: false,
-                    permissionGranted: await chrome.permissions.contains({
-                        origins: Core.matchPatternsForHost(state.hostname)
-                    })
+                    permissionGranted: state.status.permissionGranted
                 };
             }
             showNotice(t('disabled'));

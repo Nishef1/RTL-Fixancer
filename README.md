@@ -2,13 +2,13 @@
 
 RTL Fixancer is a private, per-site Chrome extension that improves Persian, Arabic, and Hebrew typography without sending page content anywhere.
 
-## What changed in 4.0
+## Permissions and site activation (4.1.9)
 
-Version 4.0 replaces the legacy all-site runtime with a permission-first architecture:
+Chrome receives HTTP/HTTPS host access once during installation or a version update, eliminating repeated Allow prompts when enabling new domains. Chrome may request approval for this new permission once.
 
 - No static `<all_urls>` content script.
-- No permanent access to every website at install time.
-- Chrome asks for access only when the user enables a site.
+- Broad host capability does **not** automatically process every website.
+- Chrome site-access controls can still restrict individual sites.
 - Content scripts are registered dynamically for enabled hostnames.
 - Only the top frame is processed.
 - One event-driven `MutationObserver` replaces recurring DOM polling.
@@ -22,7 +22,7 @@ Version 4.0 replaces the legacy all-site runtime with a permission-first archite
 - Safe handling of mixed RTL/LTR text.
 - Vazir, Shabnam, or the website's own font.
 - Adjustable font size and detection sensitivity.
-- Per-site permissions and enabled-site management.
+- Per-site activation and enabled-site management without repeated Chrome permission prompts.
 - Optimized adapters for X (Twitter), ChatGPT, Gemini, Google AI Studio, Perplexity, and DeepSeek.
 - Code blocks and host navigation controls remain LTR.
 - English and Persian popup UI.
@@ -49,14 +49,14 @@ This runs manifest/source validation and the core unit tests. After runtime chan
 
 ## Privacy and security
 
-RTL Fixancer works locally. It does not include analytics, remote code, network APIs, or page-content uploads. Host access is optional and requested only for hostnames explicitly enabled by the user.
+RTL Fixancer works locally. It does not include analytics, remote code, network APIs, or page-content uploads. Chrome grants broad HTTP/HTTPS host capability at installation (or after approving an update), but RTL Fixancer registers scripts only for hostnames explicitly enabled by the user. Chrome's own site-access controls remain available.
 
 The only web-accessible files are the bundled Vazir and Shabnam font files.
 
 ## Project structure
 
 ```text
-background.js        Permission, registration, context-menu, and icon controller
+background.js        Host-access checks, registrations, context menus, and icons
 content.js           Reversible, event-driven page runtime
 lib/core.js          Shared settings, domain, and language-detection logic
 popup.html/css/js    Accessible extension popup
