@@ -74,7 +74,13 @@
     const MAX_LIST_ITEM_PARAGRAPHS = 4;
     const NEVER_BLOCK_TAGS = new Set(['html', 'body', 'main']);
     const LIST_SELECTOR = 'ol, ul, [role="list"]';
-    const INLINE_SELECTOR = [...INLINE_TAGS].join(',');
+    // Inline elements worth isolating when they hold a Latin run. Plain
+    // <span> is left out: ChatGPT wraps every streamed word in one, and
+    // re-scanning them on each token made streaming O(words²).
+    const LTR_ISOLATION_SELECTOR = 'a, abbr, b, bdi, cite, del, em, i, ins, mark, q, s, small, strong, sub, sup, time, u';
+    // Present inside a block => read its text with a filtered walk instead
+    // of the native textContent fast path.
+    const TEXT_EXCLUDED_SELECTOR = [...SKIP_TAGS, '[aria-hidden="true"]'].join(',');
     const EDITABLE_SELECTOR = [
         'textarea',
         'input:not([type])',
@@ -91,6 +97,10 @@
     const MAX_BLOCK_TEXT = 4000;
     const MAX_LTR_INLINE_TEXT = 160;
     const FRAME_BUDGET_MS = 8;
+    // While the user scrolls, idle work yields more often so it never
+    // competes with scrolling frames (hosts mount content as you scroll).
+    const SCROLL_BUDGET_MS = 3;
+    const SCROLL_SETTLE_MS = 150;
 
     class RTLFixancerRuntime {
         constructor() {
@@ -105,6 +115,8 @@
             this.pendingBlocks = new Set();
             this.pendingEditors = new Set();
             this.walkers = [];
+            this.skipMemo = new Map();
+            this.lastScrollAt = 0;
             this.scheduled = false;
             this.idleHandle = null;
             this.originalState = new WeakMap();
@@ -114,6 +126,7 @@
 
             this.acceptNode = this.acceptNode.bind(this);
             this.onInput = this.onInput.bind(this);
+            this.onScroll = this.onScroll.bind(this);
             this.onMutation = this.onMutation.bind(this);
             this.onMessage = this.onMessage.bind(this);
             this.onStorageChanged = this.onStorageChanged.bind(this);
@@ -175,6 +188,7 @@
             document.addEventListener('input', this.onInput, true);
             document.addEventListener('compositionend', this.onInput, true);
             document.addEventListener('focusin', this.onInput, true);
+            document.addEventListener('scroll', this.onScroll, { capture: true, passive: true });
         }
 
         detachListeners() {
@@ -183,6 +197,11 @@
             document.removeEventListener('input', this.onInput, true);
             document.removeEventListener('compositionend', this.onInput, true);
             document.removeEventListener('focusin', this.onInput, true);
+            document.removeEventListener('scroll', this.onScroll, { capture: true });
+        }
+
+        onScroll() {
+            this.lastScrollAt = performance.now();
         }
 
         // Observes a document or open shadow root and queues it for a full,
@@ -243,26 +262,31 @@
             // the marked block inherit from that segment instead. A page-wide
             // [dir="ltr"] wrapper above the block must not disable the font.
             //
-            // Every selector here is matched against every span on the page
-            // (ChatGPT renders one span per word), so :not() holds only
-            // simple selectors: no descendant combinators, no substring
-            // attribute matches.
-            const inlineText = ':is(span, a, strong, b, em, i, u, small, mark, cite, q, del, ins, sub, sup)';
-            const protectedText = `:is(pre, code, kbd, samp, [dir="ltr"], [${LTR_ATTR}="true"], [data-rtl-fixancer-ignore])`;
+            // These rules are matched against every span on the page
+            // (ChatGPT renders one span per word). Each selector ends in a
+            // plain tag so the engine indexes it by tag name, and :not()
+            // holds only simple selectors: no :is() lists on the right, no
+            // descendant combinators inside :not(), no substring matches.
+            const inlineTags = ['span', 'a', 'strong', 'b', 'em', 'i', 'u', 'small', 'mark', 'cite', 'q', 'del', 'ins', 'sub', 'sup'];
+            const unprotected = `:where(:not([dir="ltr"]):not([${LTR_ATTR}="true"]):not([data-rtl-fixancer-ignore]))`;
+            const protectedRegion = `:is(pre, code, kbd, samp, [dir="ltr"], [${LTR_ATTR}="true"], [data-rtl-fixancer-ignore])`;
             const scopes = [`[${MARK_ATTR}="rtl"]`, `[${LIST_ATTR}="rtl"] > li`];
+            const each = (prefixes, targets) => prefixes
+                .flatMap(prefix => targets.map(target => `${prefix} ${target}`)).join(', ');
             const nestedTextFontRule = custom ? `
-                ${scopes.map(scope => `${scope} ${inlineText}:not(${protectedText})`).join(',\n')} {
+                ${each(scopes, inlineTags.map(tag => tag + unprotected))} {
                     ${fontRule('ar')}
                 }
                 [${MARK_ATTR}="rtl"][${LANGUAGE_ATTR}="he"],
-                [${MARK_ATTR}="rtl"][${LANGUAGE_ATTR}="he"] ${inlineText}:not(${protectedText}),
+                ${each([`[${MARK_ATTR}="rtl"][${LANGUAGE_ATTR}="he"]`], inlineTags.map(tag => tag + unprotected))},
                 [${INPUT_ATTR}="rtl"][${LANGUAGE_ATTR}="he"] {
                     ${fontRule('he')}
                 }
-                ${scopes.map(scope => `${scope} ${protectedText} ${inlineText}`).join(',\n')} {
+                ${each(scopes.map(scope => `${scope} ${protectedRegion}`), inlineTags)} {
                     font-family: inherit !important;
                 }
             ` : '';
+            const codeTags = ['pre', 'code', 'kbd', 'samp'];
 
             return `
                 [${MARK_ATTR}="rtl"], [${INPUT_ATTR}="rtl"] {
@@ -277,7 +301,7 @@
                     ${sizeRule}
                 }
                 /* Rich-text editors (ProseMirror, Lexical...) align child paragraphs themselves. */
-                [${INPUT_ATTR}="rtl"] > :is(p, div) {
+                [${INPUT_ATTR}="rtl"] > p, [${INPUT_ATTR}="rtl"] > div {
                     direction: rtl !important;
                     text-align: right !important;
                     unicode-bidi: isolate !important;
@@ -305,13 +329,12 @@
                     unicode-bidi: isolate;
                     font-variant-numeric: tabular-nums;
                 }
-                [${MARK_ATTR}="rtl"] :is(pre, code, kbd, samp),
-                [${MARK_ATTR}="rtl"] :is(bdi, [dir="ltr"]) {
+                ${each([`[${MARK_ATTR}="rtl"]`], [...codeTags, 'bdi', '[dir="ltr"]'])} {
                     direction: ltr !important;
                     text-align: left !important;
                     unicode-bidi: isolate !important;
                 }
-                [${MARK_ATTR}="rtl"] :is(pre, code, kbd, samp) {
+                ${each([`[${MARK_ATTR}="rtl"]`], codeTags)} {
                     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
                 }
                 ${nestedTextFontRule}
@@ -417,8 +440,11 @@
 
             const started = performance.now();
             // Idle periods can be 50ms long; cap anyway so typing never waits on us.
-            const hasTime = () => performance.now() - started < FRAME_BUDGET_MS
+            const budget = started - this.lastScrollAt < SCROLL_SETTLE_MS ? SCROLL_BUDGET_MS : FRAME_BUDGET_MS;
+            const hasTime = () => performance.now() - started < budget
                 && (!deadline || deadline.didTimeout || deadline.timeRemaining() > 1);
+            // Blocks in one pass share ancestors; test each ancestor once.
+            this.skipMemo.clear();
 
             try {
                 for (const node of this.pendingNodes) {
@@ -501,11 +527,30 @@
 
         isTextBlock(block) {
             if (!block?.isConnected || NEVER_BLOCK_TAGS.has(block.localName)) return false;
-            if (block.closest(SKIP_SELECTOR)) return false;
+            if (this.isSkipped(block)) return false;
             if (typeof block.className === 'string' && UI_CLASS_RE.test(block.className)) return false;
             if (TEXT_BLOCK_TAGS.has(block.localName)) return true;
             if (block.localName === 'li') return this.isListItemBlock(block);
             return !this.hasNestedBlock(block);
+        }
+
+        isSkipped(element) {
+            const chain = [];
+            let skipped = false;
+            for (let current = element; current; current = current.parentElement) {
+                const cached = this.skipMemo.get(current);
+                if (cached !== undefined) {
+                    skipped = cached;
+                    break;
+                }
+                chain.push(current);
+                if (current.matches(SKIP_SELECTOR)) {
+                    skipped = true;
+                    break;
+                }
+            }
+            for (const visited of chain) this.skipMemo.set(visited, skipped);
+            return skipped;
         }
 
         // A nested block only counts as layout when it is not wrapped in an
@@ -530,6 +575,7 @@
         }
 
         blockText(block) {
+            if (!block.querySelector(TEXT_EXCLUDED_SELECTOR)) return block.textContent.slice(0, MAX_BLOCK_TEXT);
             const walker = document.createTreeWalker(block, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
                 acceptNode: node => {
                     if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
@@ -582,7 +628,7 @@
         // Short Latin-only inline runs (names, URLs, product names) inside
         // an RTL block are isolated so their punctuation stays in place.
         isolateLtrInlines(block) {
-            for (const inline of block.querySelectorAll(INLINE_SELECTOR)) {
+            for (const inline of block.querySelectorAll(LTR_ISOLATION_SELECTOR)) {
                 const text = inline.textContent;
                 if (text.length <= MAX_LTR_INLINE_TEXT && !SINGLE_WORD_RE.test(text) && !Core.hasRtlCharacters(text)
                     && Core.classifyText(text, this.settings.detectionMode).direction === 'ltr') {

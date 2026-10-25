@@ -81,13 +81,17 @@ test('observes only dir attributes, never page-wide class or style churn', async
 
 test('applies the selected font to nested text without letting a page-wide LTR wrapper disable it', async () => {
     const { css } = await runtimeFixture();
-    assert.match(css, /\[data-rtl-fixancer="rtl"\] :is\(span, a, strong, b, em/);
     // Exclusions are simple selectors on the span itself...
-    assert.match(css, /\):not\(:is\(pre, code, kbd, samp, \[dir="ltr"\]/);
+    assert.ok(css.includes('[data-rtl-fixancer="rtl"] span:where(:not([dir="ltr"]):not([data-rtl-fixancer-ltr="true"])'));
     // ...and only regions INSIDE the marked block pass their font down.
     assert.ok(css.includes('[data-rtl-fixancer="rtl"] :is(pre, code, kbd, samp, [dir="ltr"]'));
     assert.ok(css.includes('[data-rtl-fixancer-list="rtl"] > li :is(pre, code, kbd, samp, [dir="ltr"]'));
     assert.doesNotMatch(css, /:not\([^)]*\s\*/, 'no descendant combinators inside :not()');
+    // Every selector ends in a tag/attribute, never an :is() list, so the
+    // style engine can index it instead of testing every element.
+    for (const selector of css.split('{').map(part => part.split('}').pop()).join(',').split(',')) {
+        assert.doesNotMatch(selector.trim(), /:is\([^)]*\)$/, `selector ends in :is(): ${selector.trim()}`);
+    }
     assert.doesNotMatch(css, /class\*=/);
     assert.match(css, /font-family: 'RTLFixancerVazir'/);
 });
