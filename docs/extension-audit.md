@@ -1,6 +1,6 @@
-# RTL Fixancer Architecture Audit (4.1.9 update)
+# RTL Fixancer Architecture Audit (4.2.0 update)
 
-Date: 2026-09-23
+Date: 2026-10-25
 
 ## Security boundary
 
@@ -15,7 +15,11 @@ Date: 2026-09-23
 
 ## Runtime model
 
-`content.js` uses one `MutationObserver`, an idle-work queue, and delegated editor events. It contains no interval-based DOM scanning. Candidate elements are text-bearing leaves; structural UI, code, embedded content, and navigation are skipped. X/Twitter is handled by a narrow adapter that promotes `[data-testid="tweetText"]` to a block candidate so native `dir="auto"` tweet containers are aligned as a block instead of modifying only an inner span.
+`content.js` uses one `MutationObserver`, an idle-work queue, and delegated editor events. It contains no interval-based DOM scanning and no per-site selectors.
+
+Detection is text driven: a text node containing RTL characters is followed up to its nearest non-inline ancestor (its text block), and that block is classified as a whole. Blocks that contain other block elements are layout containers and are never marked; `<li>` items qualify only when they hold no headings, tables, code, sections, or more than four paragraphs, because hosts such as ChatGPT render whole messages as `<li>`. Code, embedded content, editors, navigation, headers, footers, asides, buttons, and toolbars are skipped. Open shadow roots are observed and receive the rules through `adoptedStyleSheets`.
+
+The observer callback only records nodes; classification runs in `requestIdleCallback` with an 8 ms budget per pass. Only the `dir` attribute is observed (to re-apply after a host rewrite) — observing `class`/`style` page-wide made busy SPAs lag. Editors are read with `textContent`, never `innerText`, to avoid forced layout on each keystroke.
 
 Before setting `dir` or extension data attributes, the runtime records whether each attribute existed and its exact original value. It also records the last value written by RTL Fixancer. Cleanup restores an original attribute only when the current DOM value is still the value owned by the extension, so a newer host-page `dir` value is preserved.
 
@@ -52,7 +56,7 @@ Unregistering alone is intentionally not treated as cleanup because already-inje
 - Confirm an unenabled site receives no content runtime.
 - Confirm exact DOM restoration without page reload.
 - Test Persian, Arabic, Hebrew, mixed text, inputs, code blocks, and lists.
-- Test X/Twitter, ChatGPT, Gemini, Google AI Studio, Perplexity, DeepSeek, and a generic site.
+- Test X/Twitter, ChatGPT, Grok, Gemini, Google AI Studio, Perplexity, DeepSeek, and a generic site.
 - Test streaming and virtualized/recycled messages.
 - Restart Chrome and verify enabled-site registrations persist.
 - Test popup keyboard navigation, dark mode, RTL popup language, reduced motion, context menus, and Print / Save as PDF.

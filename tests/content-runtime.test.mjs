@@ -1,0 +1,155 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+import vm from 'node:vm';
+
+const coreSource = await readFile(new URL('../lib/core.js', import.meta.url), 'utf8');
+const contentSource = await readFile(new URL('../content.js', import.meta.url), 'utf8');
+
+async function runtimeFixture({ selectedFont = 'vazir', fontSize = 'default' } = {}) {
+    const inserted = [];
+    const documentElement = {
+        appendChild(node) { inserted.push(node); node.isConnected = true; },
+        querySelectorAll() { return []; }
+    };
+    const document = {
+        head: documentElement,
+        documentElement,
+        createElement() { return { id: '', textContent: '', remove() {} }; },
+        createTreeWalker() { return { nextNode() { return null; } }; },
+        querySelectorAll() { return []; },
+        addEventListener() {},
+        removeEventListener() {}
+    };
+    const chrome = {
+        runtime: {
+            getURL(path) { return 'chrome-extension://test/' + path; },
+            sendMessage() { return Promise.resolve({ ok: true }); },
+            onMessage: { addListener() {} }
+        },
+        storage: {
+            sync: { get() { return Promise.resolve({ settings: { selectedFont, fontSize, enabledSites: ['example.com'] } }); } },
+            onChanged: { addListener() {} }
+        }
+    };
+    class MutationObserver {
+        observe(_root, options) { this.options = options; }
+        disconnect() {}
+    }
+    const context = vm.createContext({
+        URL, document, chrome, MutationObserver, performance,
+        Node: { ELEMENT_NODE: 1, TEXT_NODE: 3 },
+        NodeFilter: { SHOW_ELEMENT: 1, SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2, FILTER_SKIP: 3 },
+        requestIdleCallback() { return 1; },
+        cancelIdleCallback() {},
+        location: { hostname: 'example.com' }
+    });
+    context.globalThis = context;
+    vm.runInContext(coreSource, context);
+    vm.runInContext(contentSource, context);
+    for (let i = 0; i < 10 && inserted.length === 0; i++) {
+        await new Promise(resolve => setImmediate(resolve));
+    }
+    assert.equal(inserted.length, 1, 'runtime must insert its stylesheet');
+    return { css: inserted[0].textContent, runtime: context.__RTL_FIXANCER_RUNTIME_V4__ };
+}
+
+function fakeElement(localName, attributes = {}) {
+    const attrs = new Map(Object.entries(attributes));
+    return {
+        localName,
+        isConnected: true,
+        parentElement: null,
+        hasAttribute(name) { return attrs.has(name); },
+        getAttribute(name) { return attrs.get(name) ?? null; },
+        setAttribute(name, value) { attrs.set(name, String(value)); },
+        removeAttribute(name) { attrs.delete(name); },
+        closest() { return null; },
+        matches() { return false; },
+        querySelector() { return null; },
+        querySelectorAll() { return []; }
+    };
+}
+
+test('observes only dir attributes, never page-wide class or style churn', async () => {
+    const { runtime } = await runtimeFixture();
+    const options = runtime.observer.options;
+    assert.deepEqual([...options.attributeFilter], ['dir']);
+    assert.equal(options.childList, true);
+    assert.equal(options.characterData, true);
+});
+
+test('applies the selected font to nested text without letting a page-wide LTR wrapper disable it', async () => {
+    const { css } = await runtimeFixture();
+    assert.match(css, /\[data-rtl-fixancer="rtl"\] :is\(span, a, strong, b, em/);
+    assert.match(css, /:not\(pre, \[data-rtl-fixancer="rtl"\] pre \*/);
+    assert.ok(css.includes('[data-rtl-fixancer="rtl"] [dir="ltr"] *'));
+    assert.ok(css.includes('[data-rtl-fixancer-list="rtl"] > li [dir="ltr"] *'));
+    assert.ok(!css.includes(', [dir="ltr"] *,'));
+    assert.match(css, /font-family: 'RTLFixancerVazir'/);
+});
+
+test('uses a Hebrew fallback stack for Hebrew blocks', async () => {
+    const { css } = await runtimeFixture();
+    assert.match(css, /\[data-rtl-fixancer-language="he"\][^{]*\{\s*font-family: 'RTLFixancerVazir', 'Noto Sans Hebrew'/);
+});
+
+test('respects the native font selection', async () => {
+    const { css } = await runtimeFixture({ selectedFont: 'default' });
+    assert.doesNotMatch(css, /RTLFixancerVazir' !important|RTLFixancerVazir', 'Noto/);
+    assert.doesNotMatch(css, /font-family: 'RTLFixancerShabnam'.*!important/);
+});
+
+test('relative font size applies once on the outermost marked block', async () => {
+    const { css } = await runtimeFixture({ fontSize: 'small' });
+    assert.match(css, /\[data-rtl-fixancer="rtl"\]:not\(\[data-rtl-fixancer="rtl"\] \[data-rtl-fixancer="rtl"\]\)/);
+    assert.equal(css.match(/font-size: 0\.9em !important;/g)?.length, 1);
+});
+
+test('a chat message rendered as <li> is a container, not an RTL list item', async () => {
+    const { runtime } = await runtimeFixture();
+    const message = fakeElement('li');
+    message.querySelector = selector => (selector.includes('h4') ? {} : null);
+    assert.equal(runtime.isListItemBlock(message), false);
+
+    const item = fakeElement('li');
+    const paragraph = { closest: () => item };
+    item.querySelectorAll = () => [paragraph];
+    assert.equal(runtime.isListItemBlock(item), true);
+
+    const loose = fakeElement('li');
+    loose.querySelectorAll = () => Array.from({ length: 6 }, () => ({ closest: () => loose }));
+    assert.equal(runtime.isListItemBlock(loose), false);
+});
+
+test('unchanged text re-applies an overwritten dir and restores the latest host value', async () => {
+    const { runtime } = await runtimeFixture();
+    const block = fakeElement('div', { dir: 'auto' });
+    runtime.isTextBlock = () => true;
+    runtime.blockText = () => 'سلام این یک متن فارسی است';
+    runtime.processBlock(block);
+    assert.equal(block.getAttribute('dir'), 'rtl');
+    assert.equal(block.getAttribute('data-rtl-fixancer'), 'rtl');
+
+    block.setAttribute('dir', 'ltr');
+    runtime.processBlock(block);
+    assert.equal(block.getAttribute('dir'), 'rtl');
+
+    runtime.restoreBlock(block);
+    assert.equal(block.getAttribute('dir'), 'ltr');
+    assert.equal(block.hasAttribute('data-rtl-fixancer'), false);
+});
+
+test('a block that becomes English is restored exactly', async () => {
+    const { runtime } = await runtimeFixture();
+    const block = fakeElement('p');
+    let text = 'این پاراگراف فارسی است';
+    runtime.isTextBlock = () => true;
+    runtime.blockText = () => text;
+    runtime.processBlock(block);
+    assert.equal(block.getAttribute('dir'), 'rtl');
+    text = 'This paragraph is now English';
+    runtime.processBlock(block);
+    assert.equal(block.hasAttribute('dir'), false);
+    assert.equal(block.hasAttribute('data-rtl-fixancer'), false);
+});

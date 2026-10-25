@@ -23,7 +23,8 @@ Chrome receives HTTP/HTTPS host access once during installation or a version upd
 - Vazir, Shabnam, or the website's own font.
 - Adjustable font size and detection sensitivity.
 - Per-site activation and enabled-site management without repeated Chrome permission prompts.
-- Optimized adapters for X (Twitter), ChatGPT, Gemini, Google AI Studio, Perplexity, and DeepSeek.
+- Site-agnostic detection: RTL text is found by its characters and its enclosing text block, not by per-site selectors, so it keeps working on ChatGPT, Grok, X, Gemini, AI Studio, Perplexity, DeepSeek and any other site after redesigns (open shadow roots included).
+- Idle-time, time-budgeted processing that stays light during streaming chat responses.
 - Code blocks and host navigation controls remain LTR.
 - English and Persian popup UI.
 

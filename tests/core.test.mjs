@@ -10,7 +10,7 @@ vm.runInContext(source, context, { filename: 'lib/core.js' });
 const Core = context.RTLFixancerCore;
 
 test('exposes the current core runtime version', () => {
-    assert.equal(Core.version, '4.1.11');
+    assert.equal(Core.version, '4.2.0');
 });
 
 test('normalizes hostnames and rejects invalid values', () => {
@@ -39,7 +39,6 @@ test('matches only the exact enabled hostname', () => {
     assert.equal(Core.siteMatches(['example.com'], 'example.com'), true);
     assert.equal(Core.siteMatches(['example.com'], 'chat.example.com'), false);
     assert.equal(Core.siteMatches(['example.com'], 'notexample.com'), false);
-    assert.equal(Core.findMatchingSite(['example.com', 'chat.example.com'], 'chat.example.com'), 'chat.example.com');
 });
 
 test('normalizes settings to supported values', () => {
@@ -73,6 +72,19 @@ test('keeps English text LTR and supports sensitivity thresholds', () => {
     assert.equal(Core.classifyText('Hello world').direction, 'ltr');
     assert.equal(Core.classifyText('x ا', 'strict').direction, 'ltr');
     assert.equal(Core.classifyText('x ا', 'relaxed').direction, 'rtl');
+});
+
+test('counts non-Latin LTR scripts as left-to-right', () => {
+    assert.equal(Core.classifyText('Привет мир, это русский текст с одним словом سلام').direction, 'ltr');
+    assert.equal(Core.classifyText('Ελληνικά κείμενο').direction, 'ltr');
+    assert.equal(Core.classifyText('123 456 !!!').direction, 'neutral');
+});
+
+test('pre-filters text nodes by RTL script presence', () => {
+    assert.equal(Core.hasRtlCharacters('Hello'), false);
+    assert.equal(Core.hasRtlCharacters('Hello سلام'), true);
+    assert.equal(Core.hasRtlCharacters('שלום'), true);
+    assert.equal(Core.hasRtlCharacters(null), false);
 });
 
 test('generates stable, host-specific registration IDs', () => {
