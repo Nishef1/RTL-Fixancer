@@ -47,10 +47,16 @@
         '[role="menu"]', '[role="menubar"]', '[role="tablist"]', '[role="button"]',
         '[aria-hidden="true"]', '[data-rtl-fixancer-ignore]',
         '[contenteditable]:not([contenteditable="false"])', '[role="textbox"]',
-        '[class*="codeblock" i]', '[class*="code-block" i]',
-        '[class*="codemirror" i]', '[class*="monaco" i]'
+        '.CodeMirror', '.cm-editor', '.monaco-editor', '.ace_editor'
     ].join(',');
-    const UI_CLASS_RE = /\b(sidebar|navbar|topbar|toolbar|breadcrumb|pagination)\b/i;
+    // Match whole class names only. Substring matches such as
+    // [class*="code-block"] hit Tailwind variants like
+    // `[&_[data-streamdown=code-block]]:border-0` on Grok's response
+    // container and silently skipped every message.
+    const UI_CLASS_RE = /(?:^|\s)(?:[\w-]*[-_])?(?:sidebar|navbar|topbar|toolbar|breadcrumbs?|pagination)(?:[-_][\w-]*)?(?=\s|$)/i;
+    // Elements whose content model is phrasing text: always a text block,
+    // even when a host nests a widget (e.g. a ChatGPT citation chip) inside.
+    const TEXT_BLOCK_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'dt', 'dd', 'figcaption', 'caption', 'summary']);
     // Block descendants that make an element a layout container rather than a
     // text block. Containers are never marked (lists excepted, see syncList).
     const NESTED_BLOCK_SELECTOR = [
@@ -77,10 +83,10 @@
         '[contenteditable]:not([contenteditable="false"])',
         '[role="textbox"]'
     ].join(',');
-    const CODE_EDITOR_SELECTOR = [
-        'pre', 'code',
-        '[class*="codemirror" i]', '[class*="monaco" i]', '[class*="ace_editor" i]'
-    ].join(',');
+    const CODE_EDITOR_SELECTOR = 'pre, code, .CodeMirror, .cm-editor, .monaco-editor, .ace_editor';
+    // A lone word needs no bidi isolation; hosts that wrap every streamed
+    // word in a span (ChatGPT) would otherwise get thousands of writes.
+    const SINGLE_WORD_RE = /^\s*[\p{L}\p{M}'’-]+\s*$/u;
     const MARKED_SELECTOR = `[${MARK_ATTR}], [${LTR_ATTR}]`;
     const MAX_BLOCK_TEXT = 4000;
     const MAX_LTR_INLINE_TEXT = 160;
@@ -233,31 +239,28 @@
 
             // Hosts (X/Grok in particular) set their own font on nested spans,
             // which beats an inherited font-family on the RTL block. Override
-            // text descendants, but keep code and LTR segments that live
-            // INSIDE the marked block in the site's font. A page-wide
+            // text descendants; descendants of code and LTR segments INSIDE
+            // the marked block inherit from that segment instead. A page-wide
             // [dir="ltr"] wrapper above the block must not disable the font.
-            const inlineTextSelector = 'span, a, strong, b, em, i, u, small, mark, cite, q, del, ins, sub, sup';
-            const protectedFontSelectors = [
-                'pre', 'code', 'kbd', 'samp',
-                '[class*="codeblock" i]', '[class*="code-block" i]',
-                '[dir="ltr"]', `[${LTR_ATTR}="true"]`, '[data-rtl-fixancer-ignore]'
-            ];
-            const excludedFontSelectors = protectedFontSelectors
-                .flatMap(selector => [
-                    selector,
-                    `[${MARK_ATTR}="rtl"] ${selector} *`,
-                    `[${LIST_ATTR}="rtl"] > li ${selector} *`
-                ]).join(', ');
-            const nestedTextSelector = `:is(${inlineTextSelector}):not(${excludedFontSelectors})`;
+            //
+            // Every selector here is matched against every span on the page
+            // (ChatGPT renders one span per word), so :not() holds only
+            // simple selectors: no descendant combinators, no substring
+            // attribute matches.
+            const inlineText = ':is(span, a, strong, b, em, i, u, small, mark, cite, q, del, ins, sub, sup)';
+            const protectedText = `:is(pre, code, kbd, samp, [dir="ltr"], [${LTR_ATTR}="true"], [data-rtl-fixancer-ignore])`;
+            const scopes = [`[${MARK_ATTR}="rtl"]`, `[${LIST_ATTR}="rtl"] > li`];
             const nestedTextFontRule = custom ? `
-                [${MARK_ATTR}="rtl"] ${nestedTextSelector},
-                [${LIST_ATTR}="rtl"] > li ${nestedTextSelector} {
+                ${scopes.map(scope => `${scope} ${inlineText}:not(${protectedText})`).join(',\n')} {
                     ${fontRule('ar')}
                 }
                 [${MARK_ATTR}="rtl"][${LANGUAGE_ATTR}="he"],
-                [${MARK_ATTR}="rtl"][${LANGUAGE_ATTR}="he"] ${nestedTextSelector},
+                [${MARK_ATTR}="rtl"][${LANGUAGE_ATTR}="he"] ${inlineText}:not(${protectedText}),
                 [${INPUT_ATTR}="rtl"][${LANGUAGE_ATTR}="he"] {
                     ${fontRule('he')}
+                }
+                ${scopes.map(scope => `${scope} ${protectedText} ${inlineText}`).join(',\n')} {
+                    font-family: inherit !important;
                 }
             ` : '';
 
@@ -302,13 +305,13 @@
                     unicode-bidi: isolate;
                     font-variant-numeric: tabular-nums;
                 }
-                [${MARK_ATTR}="rtl"] :is(pre, code, kbd, samp, [class*="codeblock" i], [class*="code-block" i]),
+                [${MARK_ATTR}="rtl"] :is(pre, code, kbd, samp),
                 [${MARK_ATTR}="rtl"] :is(bdi, [dir="ltr"]) {
                     direction: ltr !important;
                     text-align: left !important;
                     unicode-bidi: isolate !important;
                 }
-                [${MARK_ATTR}="rtl"] :is(pre, code, kbd, samp, [class*="codeblock" i], [class*="code-block" i]) {
+                [${MARK_ATTR}="rtl"] :is(pre, code, kbd, samp) {
                     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
                 }
                 ${nestedTextFontRule}
@@ -500,8 +503,20 @@
             if (!block?.isConnected || NEVER_BLOCK_TAGS.has(block.localName)) return false;
             if (block.closest(SKIP_SELECTOR)) return false;
             if (typeof block.className === 'string' && UI_CLASS_RE.test(block.className)) return false;
+            if (TEXT_BLOCK_TAGS.has(block.localName)) return true;
             if (block.localName === 'li') return this.isListItemBlock(block);
-            return !block.querySelector(NESTED_BLOCK_SELECTOR);
+            return !this.hasNestedBlock(block);
+        }
+
+        // A nested block only counts as layout when it is not wrapped in an
+        // inline element: an inline-wrapped <div> is a widget inside the text.
+        hasNestedBlock(block) {
+            for (const nested of block.querySelectorAll(NESTED_BLOCK_SELECTOR)) {
+                let parent = nested.parentElement;
+                while (parent && parent !== block && !INLINE_TAGS.has(parent.localName)) parent = parent.parentElement;
+                if (parent === block) return true;
+            }
+            return false;
         }
 
         isListItemBlock(item) {
@@ -569,7 +584,7 @@
         isolateLtrInlines(block) {
             for (const inline of block.querySelectorAll(INLINE_SELECTOR)) {
                 const text = inline.textContent;
-                if (text.length <= MAX_LTR_INLINE_TEXT && !Core.hasRtlCharacters(text)
+                if (text.length <= MAX_LTR_INLINE_TEXT && !SINGLE_WORD_RE.test(text) && !Core.hasRtlCharacters(text)
                     && Core.classifyText(text, this.settings.detectionMode).direction === 'ltr') {
                     this.setOwnedAttribute(inline, LTR_ATTR, 'true');
                     this.setOwnedAttribute(inline, 'dir', 'ltr');

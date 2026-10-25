@@ -82,10 +82,13 @@ test('observes only dir attributes, never page-wide class or style churn', async
 test('applies the selected font to nested text without letting a page-wide LTR wrapper disable it', async () => {
     const { css } = await runtimeFixture();
     assert.match(css, /\[data-rtl-fixancer="rtl"\] :is\(span, a, strong, b, em/);
-    assert.match(css, /:not\(pre, \[data-rtl-fixancer="rtl"\] pre \*/);
-    assert.ok(css.includes('[data-rtl-fixancer="rtl"] [dir="ltr"] *'));
-    assert.ok(css.includes('[data-rtl-fixancer-list="rtl"] > li [dir="ltr"] *'));
-    assert.ok(!css.includes(', [dir="ltr"] *,'));
+    // Exclusions are simple selectors on the span itself...
+    assert.match(css, /\):not\(:is\(pre, code, kbd, samp, \[dir="ltr"\]/);
+    // ...and only regions INSIDE the marked block pass their font down.
+    assert.ok(css.includes('[data-rtl-fixancer="rtl"] :is(pre, code, kbd, samp, [dir="ltr"]'));
+    assert.ok(css.includes('[data-rtl-fixancer-list="rtl"] > li :is(pre, code, kbd, samp, [dir="ltr"]'));
+    assert.doesNotMatch(css, /:not\([^)]*\s\*/, 'no descendant combinators inside :not()');
+    assert.doesNotMatch(css, /class\*=/);
     assert.match(css, /font-family: 'RTLFixancerVazir'/);
 });
 
@@ -104,6 +107,24 @@ test('relative font size applies once on the outermost marked block', async () =
     const { css } = await runtimeFixture({ fontSize: 'small' });
     assert.match(css, /\[data-rtl-fixancer="rtl"\]:not\(\[data-rtl-fixancer="rtl"\] \[data-rtl-fixancer="rtl"\]\)/);
     assert.equal(css.match(/font-size: 0\.9em !important;/g)?.length, 1);
+});
+
+test('a paragraph stays a text block even with a nested widget', async () => {
+    const { runtime } = await runtimeFixture();
+    const paragraph = fakeElement('p');
+    paragraph.querySelector = () => ({});
+    paragraph.querySelectorAll = () => [{}];
+    assert.equal(runtime.isTextBlock(paragraph), true);
+});
+
+test('a Tailwind code-block variant class on an ancestor does not skip the text', async () => {
+    const { runtime } = await runtimeFixture();
+    const block = fakeElement('div');
+    block.className = 'space-y-4 [&_[data-streamdown=code-block]]:border-0 group-data-[sidebar=open]:px-2';
+    block.closest = selector => (selector.includes('code-block') ? {} : null);
+    assert.equal(runtime.isTextBlock(block), true);
+    block.className = 'app-sidebar';
+    assert.equal(runtime.isTextBlock(block), false);
 });
 
 test('a chat message rendered as <li> is a container, not an RTL list item', async () => {

@@ -8,7 +8,7 @@ const read = relative => readFile(path.join(root, relative), 'utf8');
 const manifest = JSON.parse(await read('manifest.json'));
 
 assert.equal(manifest.manifest_version, 3, 'Manifest V3 is required.');
-assert.equal(manifest.version, '4.2.0');
+assert.equal(manifest.version, '4.2.1');
 assert.equal(manifest.background?.service_worker, 'background.js');
 assert.equal(manifest.content_scripts, undefined, 'Static all-site content scripts are forbidden.');
 assert.deepEqual(manifest.host_permissions, ['http://*/*', 'https://*/*']);
@@ -87,8 +87,11 @@ assert(content.includes('list-style-position: outside !important;'), 'Ordered-li
 assert(content.includes('> li::marker'), 'RTL list markers require dedicated bidi styling.');
 assert(content.includes("const LTR_ATTR = 'data-rtl-fixancer-ltr';"), 'Short Latin inline tokens inside RTL blocks must be isolated.');
 assert(content.includes('nestedTextFontRule'), 'RTL text descendants need explicit font styling to override host fonts.');
-assert(content.includes('excludedFontSelectors'), 'Code and explicit LTR segments must be excluded from font overrides.');
-assert(content.includes('`[${MARK_ATTR}="rtl"] ${selector} *`'), 'LTR exclusions must be scoped within a marked RTL block.');
+assert(content.includes('protectedText'), 'Code and explicit LTR segments must be excluded from font overrides.');
+assert(content.includes('${scope} ${protectedText} ${inlineText}'), 'LTR/code exclusions must be scoped within a marked RTL block.');
+assert(!/['"`]\[class\*=/.test(content), 'Substring class selectors match Tailwind variants (Grok) and are slow on per-word spans.');
+assert(content.includes('TEXT_BLOCK_TAGS'), 'Paragraphs with embedded widgets (citation chips) must stay text blocks.');
+assert(content.includes('SINGLE_WORD_RE'), 'Per-word spans must not be isolated one by one.');
 assert(content.includes('adoptedStyleSheets'), 'Open shadow roots must receive the RTL rules.');
 assert(content.includes('async applySettings(nextSettings)'), 'Storage changes should avoid unnecessary full runtime restarts.');
 assert(content.includes('editorHostFor(element)'), 'Nested editor events must resolve to their editable host.');
