@@ -531,6 +531,8 @@
             if (this.isSkipped(block)) return false;
             if (typeof block.className === 'string' && UI_CLASS_RE.test(block.className)) return false;
             if (TEXT_BLOCK_TAGS.has(block.localName)) return true;
+            // Hidden auto-grow copy of a textarea: styled by processEditor.
+            if (block.parentElement?.querySelector(':scope > textarea')) return false;
             if (block.localName === 'li') return this.isListItemBlock(block);
             // A container with its own RTL text beside a nested block (a bullet
             // row with a sub-row) is still a paragraph of that text.
@@ -605,7 +607,7 @@
 
         processBlock(block) {
             if (!this.isTextBlock(block)) {
-                if (this.touchedElements.has(block)) this.restoreBlock(block);
+                if (this.touchedElements.has(block) && !block.hasAttribute(INPUT_ATTR)) this.restoreBlock(block);
                 return;
             }
 
@@ -712,15 +714,27 @@
                 // letter remains. Re-flipping on every mixed-language keystroke
                 // makes the caret and auto-growing textareas jump.
                 const keep = editor.getAttribute(INPUT_ATTR) === 'rtl' && Core.hasRtlCharacters(text);
+                const targets = [editor, ...this.mirrorsFor(editor)];
                 if (result.direction !== 'rtl' && !keep) {
-                    this.restoreElement(editor);
+                    for (const target of targets) this.restoreElement(target);
                     return;
                 }
-                this.setOwnedAttribute(editor, INPUT_ATTR, 'rtl');
-                if (result.language) this.setOwnedAttribute(editor, LANGUAGE_ATTR, result.language);
-                else if (!editor.hasAttribute(LANGUAGE_ATTR)) this.setOwnedAttribute(editor, LANGUAGE_ATTR, 'ar');
-                this.setOwnedAttribute(editor, 'dir', 'rtl');
+                const language = result.language || editor.getAttribute(LANGUAGE_ATTR) || 'ar';
+                // Auto-grow textareas (DeepSeek...) size themselves from a hidden
+                // sibling copy of the text. It must wrap exactly like the
+                // textarea, or the box height and caret jump on every keystroke.
+                for (const target of targets) {
+                    this.setOwnedAttribute(target, INPUT_ATTR, 'rtl');
+                    this.setOwnedAttribute(target, LANGUAGE_ATTR, language);
+                    this.setOwnedAttribute(target, 'dir', 'rtl');
+                }
             } catch (_) {}
+        }
+
+        mirrorsFor(editor) {
+            if (editor.localName !== 'textarea' || !editor.parentElement) return [];
+            return Array.from(editor.parentElement.children).filter(sibling => sibling !== editor
+                && sibling.childElementCount === 0 && !sibling.matches(EDITABLE_SELECTOR));
         }
 
         onInput(event) {

@@ -204,3 +204,26 @@ test('a bullet row with its own RTL text and a nested sub-row is a text block', 
     row.firstChild = { nodeType: 3, data: '   ', nextSibling: null };
     assert.equal(runtime.isTextBlock(row), false);
 });
+
+test('an auto-grow mirror beside a textarea gets the same RTL state and is never a text block', async () => {
+    const { runtime } = await runtimeFixture();
+    const parent = fakeElement('div');
+    const editor = fakeElement('textarea');
+    const mirror = fakeElement('div');
+    mirror.childElementCount = 0;
+    editor.value = 'سلام دوست من';
+    editor.parentElement = parent;
+    mirror.parentElement = parent;
+    parent.children = [editor, mirror];
+    parent.querySelector = selector => (selector.includes('textarea') ? editor : null);
+    editor.closest = selector => (selector.includes('textarea') ? editor : null);
+    runtime.processEditor(editor);
+    assert.equal(mirror.getAttribute('dir'), 'rtl');
+    assert.equal(mirror.getAttribute('data-rtl-fixancer-input'), 'rtl');
+    assert.equal(runtime.isTextBlock(mirror), false);
+    runtime.processBlock(mirror);
+    assert.equal(mirror.getAttribute('dir'), 'rtl', 'block pass must not undo the mirror');
+    editor.value = 'English';
+    runtime.processEditor(editor);
+    assert.equal(mirror.hasAttribute('dir'), false);
+});

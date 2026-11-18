@@ -2,7 +2,7 @@
 
 ## Scope
 
-RTL Fixancer is a Manifest V3 Chrome extension. Version 4.2.3 uses manifest-declared HTTP/HTTPS host access and per-site opt-in dynamic content-script registration. Work directly on `main`; do not create compatibility branches, duplicate runtimes, or patch layers.
+RTL Fixancer is a Manifest V3 Chrome extension. Version 4.2.4 uses manifest-declared HTTP/HTTPS host access and per-site opt-in dynamic content-script registration. Work directly on `main`; do not create compatibility branches, duplicate runtimes, or patch layers.
 
 ## Architecture
 
