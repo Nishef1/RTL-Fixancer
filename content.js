@@ -296,8 +296,9 @@
                     ${fontRule('ar')}
                 }
                 /* Prevent relative size multiplication on nested marked blocks. */
-                [${MARK_ATTR}="rtl"]:not([${MARK_ATTR}="rtl"] [${MARK_ATTR}="rtl"]),
-                [${INPUT_ATTR}="rtl"]:not([${INPUT_ATTR}="rtl"] [${INPUT_ATTR}="rtl"]) {
+                /* Editors keep the host size: resizing a composer mid-typing
+                   changes its auto-grow height and makes the caret jump. */
+                [${MARK_ATTR}="rtl"]:not([${MARK_ATTR}="rtl"] [${MARK_ATTR}="rtl"]) {
                     ${sizeRule}
                 }
                 /* Rich-text editors (ProseMirror, Lexical...) align child paragraphs themselves. */
@@ -531,7 +532,16 @@
             if (typeof block.className === 'string' && UI_CLASS_RE.test(block.className)) return false;
             if (TEXT_BLOCK_TAGS.has(block.localName)) return true;
             if (block.localName === 'li') return this.isListItemBlock(block);
-            return !this.hasNestedBlock(block);
+            // A container with its own RTL text beside a nested block (a bullet
+            // row with a sub-row) is still a paragraph of that text.
+            return !this.hasNestedBlock(block) || this.hasOwnRtlText(block);
+        }
+
+        hasOwnRtlText(block) {
+            for (let child = block.firstChild; child; child = child.nextSibling) {
+                if (child.nodeType === Node.TEXT_NODE && Core.hasRtlCharacters(child.data)) return true;
+            }
+            return false;
         }
 
         isSkipped(element) {
@@ -696,13 +706,19 @@
             const editor = this.editorHostFor(element);
             if (!editor) return;
             try {
-                const result = Core.classifyText(this.editorText(editor), this.settings.detectionMode);
-                if (result.direction !== 'rtl') {
+                const text = this.editorText(editor);
+                const result = Core.classifyText(text, this.settings.detectionMode);
+                // Hysteresis: once a composer is RTL, keep it RTL while any RTL
+                // letter remains. Re-flipping on every mixed-language keystroke
+                // makes the caret and auto-growing textareas jump.
+                const keep = editor.getAttribute(INPUT_ATTR) === 'rtl' && Core.hasRtlCharacters(text);
+                if (result.direction !== 'rtl' && !keep) {
                     this.restoreElement(editor);
                     return;
                 }
                 this.setOwnedAttribute(editor, INPUT_ATTR, 'rtl');
-                this.setOwnedAttribute(editor, LANGUAGE_ATTR, result.language || 'ar');
+                if (result.language) this.setOwnedAttribute(editor, LANGUAGE_ATTR, result.language);
+                else if (!editor.hasAttribute(LANGUAGE_ATTR)) this.setOwnedAttribute(editor, LANGUAGE_ATTR, 'ar');
                 this.setOwnedAttribute(editor, 'dir', 'rtl');
             } catch (_) {}
         }

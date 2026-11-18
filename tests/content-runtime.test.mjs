@@ -178,3 +178,29 @@ test('a block that becomes English is restored exactly', async () => {
     assert.equal(block.hasAttribute('dir'), false);
     assert.equal(block.hasAttribute('data-rtl-fixancer'), false);
 });
+
+test('a composer stays RTL while mixed text is typed and keeps its host font size', async () => {
+    const { runtime, css } = await runtimeFixture({ fontSize: 'large' });
+    const editor = fakeElement('textarea');
+    editor.value = 'سلام دوست من';
+    editor.closest = selector => (selector.includes('textarea') ? editor : null);
+    runtime.processEditor(editor);
+    assert.equal(editor.getAttribute('dir'), 'rtl');
+    editor.value = 'سلام please check this English sentence for me';
+    runtime.processEditor(editor);
+    assert.equal(editor.getAttribute('dir'), 'rtl', 'must not flip back mid-typing');
+    editor.value = 'only English now';
+    runtime.processEditor(editor);
+    assert.equal(editor.hasAttribute('dir'), false);
+    assert.doesNotMatch(css, /\[data-rtl-fixancer-input="rtl"\]:not\(/, 'editors must not be resized');
+});
+
+test('a bullet row with its own RTL text and a nested sub-row is a text block', async () => {
+    const { runtime } = await runtimeFixture();
+    const row = fakeElement('div');
+    row.firstChild = { nodeType: 3, data: '• گزینه دوم', nextSibling: null };
+    runtime.hasNestedBlock = () => true;
+    assert.equal(runtime.isTextBlock(row), true);
+    row.firstChild = { nodeType: 3, data: '   ', nextSibling: null };
+    assert.equal(runtime.isTextBlock(row), false);
+});

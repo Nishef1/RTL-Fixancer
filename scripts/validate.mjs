@@ -8,7 +8,7 @@ const read = relative => readFile(path.join(root, relative), 'utf8');
 const manifest = JSON.parse(await read('manifest.json'));
 
 assert.equal(manifest.manifest_version, 3, 'Manifest V3 is required.');
-assert.equal(manifest.version, '4.2.2');
+assert.equal(manifest.version, '4.2.3');
 assert.equal(manifest.background?.service_worker, 'background.js');
 assert.equal(manifest.content_scripts, undefined, 'Static all-site content scripts are forbidden.');
 assert.deepEqual(manifest.host_permissions, ['http://*/*', 'https://*/*']);
@@ -96,6 +96,7 @@ assert(content.includes('TEXT_BLOCK_TAGS'), 'Paragraphs with embedded widgets (c
 assert(content.includes('SINGLE_WORD_RE'), 'Per-word spans must not be isolated one by one.');
 assert(content.includes('adoptedStyleSheets'), 'Open shadow roots must receive the RTL rules.');
 assert(content.includes('async applySettings(nextSettings)'), 'Storage changes should avoid unnecessary full runtime restarts.');
+assert(content.includes('const keep = editor.getAttribute(INPUT_ATTR)'), 'Composers need direction hysteresis to avoid caret jumps.');
 assert(content.includes('editorHostFor(element)'), 'Nested editor events must resolve to their editable host.');
 assert(content.includes('[${INPUT_ATTR}="rtl"] > p, [${INPUT_ATTR}="rtl"] > div'), 'Rich-text editor child blocks must inherit forced RTL alignment.');
 assert(content.includes('existingRuntime.version === RUNTIME_VERSION'), 'Injected runtime replacement must be version aware.');
